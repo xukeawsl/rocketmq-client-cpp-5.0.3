@@ -29,7 +29,6 @@
 #include "google/protobuf/struct.pb.h"
 #include "google/protobuf/util/json_util.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -76,7 +75,7 @@ ConfigFileCredentialsProvider::ConfigFileCredentialsProvider() {
     ghc::filesystem::path config_file_path(config_file);
     std::error_code ec;
     if (!ghc::filesystem::exists(config_file_path, ec) || ec) {
-      SPDLOG_WARN("Config file[{}] does not exist.", config_file);
+      RMQLOG_WARN("Config file[{}] does not exist.", config_file);
       return;
     }
     std::ifstream config_file_stream;
@@ -98,12 +97,12 @@ ConfigFileCredentialsProvider::ConfigFileCredentialsProvider() {
         if (fields.contains(ACCESS_SECRET_FIELD_NAME)) {
           access_secret_ = fields.at(ACCESS_SECRET_FIELD_NAME).string_value();
         }
-        SPDLOG_DEBUG("Credentials for access_key={} loaded", access_key_);
+        RMQLOG_DEBUG("Credentials for access_key={} loaded", access_key_);
       } else {
-        SPDLOG_WARN("Failed to parse credential JSON config file. Message: {}", status.message().data());
+        RMQLOG_WARN("Failed to parse credential JSON config file. Message: {}", status.message().data());
       }
     } else {
-      SPDLOG_WARN("Failed to open file: {}", config_file);
+      RMQLOG_WARN("Failed to open file: {}", config_file);
       return;
     }
   }

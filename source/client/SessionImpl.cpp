@@ -18,7 +18,6 @@
 #include "SessionImpl.h"
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -34,7 +33,7 @@ bool SessionImpl::await() {
 
 void SessionImpl::syncSettings() {
   auto ptr = client_.lock();
-  SPDLOG_INFO("Request client settings to {}", rpc_client_->remoteAddress());
+  RMQLOG_INFO("Request client settings to {}", rpc_client_->remoteAddress());
   TelemetryCommand command;
   command.mutable_settings()->CopyFrom(ptr->clientSettings());
   telemetry_->write(command);
@@ -42,7 +41,7 @@ void SessionImpl::syncSettings() {
 
 SessionImpl::~SessionImpl() {
   telemetry_->close();
-  SPDLOG_DEBUG("Session for {} destructed", rpc_client_->remoteAddress());
+  RMQLOG_DEBUG("Session for {} destructed", rpc_client_->remoteAddress());
 }
 
 ROCKETMQ_NAMESPACE_END

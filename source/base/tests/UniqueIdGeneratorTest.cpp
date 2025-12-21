@@ -17,7 +17,7 @@
 #include "UniqueIdGenerator.h"
 #include "absl/container/flat_hash_set.h"
 #include "rocketmq/RocketMQ.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 #include "gtest/gtest.h"
 
 #include <iostream>
@@ -34,7 +34,7 @@ TEST(UniqueIdGeneratorTest, testNext) {
   while (total--) {
     std::string id = UniqueIdGenerator::instance().next();
     if (id_set.contains(id)) {
-      SPDLOG_WARN("Yuck, found an duplicated ID: {}", id);
+      RMQLOG_WARN("Yuck, found an duplicated ID: {}", id);
     } else {
       id_set.insert(id);
     }

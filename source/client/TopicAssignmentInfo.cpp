@@ -17,7 +17,6 @@
 
 #include "TopicAssignmentInfo.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -25,7 +24,7 @@ thread_local uint32_t TopicAssignment::query_which_broker_ = 0;
 
 TopicAssignment::TopicAssignment(const QueryAssignmentResponse& response) {
   if (response.status().code() != rmq::Code::OK) {
-    SPDLOG_WARN("QueryAssignmentResponse#code is not SUCCESS. Keep assignment info intact. QueryAssignmentResponse: {}",
+    RMQLOG_WARN("QueryAssignmentResponse#code is not SUCCESS. Keep assignment info intact. QueryAssignmentResponse: {}",
                 response.DebugString());
     return;
   }
@@ -40,7 +39,7 @@ TopicAssignment::TopicAssignment(const QueryAssignmentResponse& response) {
     const auto& broker = queue.broker();
 
     if (broker.endpoints().addresses().empty()) {
-      SPDLOG_WARN("Broker[{}] is not addressable", broker.DebugString());
+      RMQLOG_WARN("Broker[{}] is not addressable", broker.DebugString());
       continue;
     }
 

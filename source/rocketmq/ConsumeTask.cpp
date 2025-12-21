@@ -23,7 +23,6 @@
 #include "rocketmq/ConsumeResult.h"
 #include "rocketmq/ErrorCode.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -80,7 +79,7 @@ void ConsumeTask::onAck(std::shared_ptr<ConsumeTask> task, const std::error_code
   }
 
   // Try to ack again later
-  SPDLOG_WARN("Failed to ack message[message-id={}]. Cause: {}. Action: retry after 1s.", task->messages_[0]->id(),
+  RMQLOG_WARN("Failed to ack message[message-id={}]. Cause: {}. Action: retry after 1s.", task->messages_[0]->id(),
               ec.message());
   task->next_step_ = NextStep::Ack;
   task->schedule();
@@ -98,7 +97,7 @@ void ConsumeTask::onNack(std::shared_ptr<ConsumeTask> task, const std::error_cod
     return;
   }
 
-  SPDLOG_WARN("Failed to nack message[message-id={}]. Cause: {}. Action: retry after 1s.", task->messages_[0]->id(),
+  RMQLOG_WARN("Failed to nack message[message-id={}]. Cause: {}. Action: retry after 1s.", task->messages_[0]->id(),
               ec.message());
   task->next_step_ = NextStep::Nack;
   task->schedule();
@@ -110,14 +109,14 @@ void ConsumeTask::onForward(std::shared_ptr<ConsumeTask> task, const std::error_
 
   // Treat both success and invalid-receipt-handle as completion
   if (!ec || ErrorCode::InvalidReceiptHandle == ec) {
-    SPDLOG_DEBUG("Message[message-id={}] is forwarded to DLQ", task->messages_[0]->id());
+    RMQLOG_DEBUG("Message[message-id={}] is forwarded to DLQ", task->messages_[0]->id());
     task->pop();
     task->next_step_ = NextStep::Consume;
     task->submit();
     return;
   }
 
-  SPDLOG_DEBUG("Failed to forward Message[message-id={}] to DLQ. Cause: {}.  Action: retry after 1s.",
+  RMQLOG_DEBUG("Failed to forward Message[message-id={}] to DLQ. Cause: {}.  Action: retry after 1s.",
                task->messages_[0]->id(), ec.message());
   task->next_step_ = NextStep::Forward;
   task->schedule();
@@ -126,12 +125,12 @@ void ConsumeTask::onForward(std::shared_ptr<ConsumeTask> task, const std::error_
 void ConsumeTask::process() {
   auto svc = service_.lock();
   if (!svc) {
-    SPDLOG_DEBUG("ConsumeMessageService has destructed");
+    RMQLOG_DEBUG("ConsumeMessageService has destructed");
     return;
   }
 
   if (messages_.empty()) {
-    SPDLOG_DEBUG("No more messages to process");
+    RMQLOG_DEBUG("No more messages to process");
     return;
   }
 
@@ -143,7 +142,7 @@ void ConsumeTask::process() {
     case NextStep::Consume: {
       const auto& listener = svc->listener();
       auto it = messages_.begin();
-      SPDLOG_DEBUG("Start to process message[message-id={}]", (*it)->id());
+      RMQLOG_DEBUG("Start to process message[message-id={}]", (*it)->id());
       svc->preHandle(**it);
 
       // Collect metrics of await_time

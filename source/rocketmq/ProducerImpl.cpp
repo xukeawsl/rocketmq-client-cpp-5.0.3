@@ -47,7 +47,7 @@ ProducerImpl::ProducerImpl() : ClientImpl(""), compress_body_threshold_(MixAll::
 }
 
 ProducerImpl::~ProducerImpl() {
-  SPDLOG_INFO("Producer instance is destructed");
+  RMQLOG_INFO("Producer instance is destructed");
   shutdown();
 }
 
@@ -56,7 +56,7 @@ void ProducerImpl::start() {
 
   State expecting = State::STARTING;
   if (!state_.compare_exchange_strong(expecting, State::STARTED)) {
-    SPDLOG_ERROR("Producer started with an unexpected state. Expecting: {}, Actual: {}", State::STARTING,
+    RMQLOG_ERROR("Producer started with an unexpected state. Expecting: {}, Actual: {}", State::STARTING,
                  state_.load(std::memory_order_relaxed));
     return;
   }
@@ -67,7 +67,7 @@ void ProducerImpl::start() {
 void ProducerImpl::shutdown() {
   State expected = State::STARTED;
   if (!state_.compare_exchange_strong(expected, State::STOPPING)) {
-    SPDLOG_ERROR("Shutdown with unexpected state. Expecting: {}, Actual: {}", State::STOPPING,
+    RMQLOG_ERROR("Shutdown with unexpected state. Expecting: {}, Actual: {}", State::STOPPING,
                  state_.load(std::memory_order_relaxed));
     return;
   }
@@ -76,7 +76,7 @@ void ProducerImpl::shutdown() {
 
   ClientImpl::shutdown();
   assert(State::STOPPED == state_.load());
-  SPDLOG_INFO("Producer instance stopped");
+  RMQLOG_INFO("Producer instance stopped");
 }
 
 void ProducerImpl::notifyClientTermination() {
@@ -97,11 +97,11 @@ void ProducerImpl::validate(const Message& message, std::error_code& ec) {
 
   if (!ec) {
     if (message.body().empty()) {
-      SPDLOG_WARN("Body of the message is null, topic={}", message.topic());
+      RMQLOG_WARN("Body of the message is null, topic={}", message.topic());
       ec = ErrorCode::MessageBodyEmpty;
     }
     if (message.body().length() > client_config_.publisher.max_body_size) {
-      SPDLOG_WARN("Body of the message to send is too large, topic={}", message.topic());
+      RMQLOG_WARN("Body of the message to send is too large, topic={}", message.topic());
       ec = ErrorCode::PayloadTooLarge;
     }
   }
@@ -189,13 +189,13 @@ void ProducerImpl::wrapSendMessageRequest(const Message& message, SendMessageReq
 
   // Add into request
   request.mutable_messages()->AddAllocated(msg);
-  SPDLOG_TRACE("SendMessageRequest: {}", request.DebugString());
+  RMQLOG_TRACE("SendMessageRequest: {}", request.DebugString());
 }
 
 SendReceipt ProducerImpl::send(MessageConstPtr message, std::error_code& ec) noexcept {
   ensureRunning(ec);
   if (ec) {
-    SPDLOG_WARN("Producer is not running");
+    RMQLOG_WARN("Producer is not running");
     SendReceipt send_receipt{};
     send_receipt.message = std::move(message);
     return send_receipt;
@@ -203,7 +203,7 @@ SendReceipt ProducerImpl::send(MessageConstPtr message, std::error_code& ec) noe
 
   auto topic_publish_info = getPublishInfo(message->topic());
   if (!topic_publish_info) {
-    SPDLOG_WARN("Route of topic[{}] is not found", message->topic());
+    RMQLOG_WARN("Route of topic[{}] is not found", message->topic());
     ec = ErrorCode::NotFound;
     SendReceipt send_receipt{};
     send_receipt.message = std::move(message);
@@ -214,7 +214,7 @@ SendReceipt ProducerImpl::send(MessageConstPtr message, std::error_code& ec) noe
   // null_opt_t
   absl::optional<std::string> message_group{};
   if (!topic_publish_info->selectMessageQueues(message_group, message_queue_list)) {
-    SPDLOG_WARN("Failed to select an addressable message queue for topic[{}]", message->topic());
+    RMQLOG_WARN("Failed to select an addressable message queue for topic[{}]", message->topic());
     ec = ErrorCode::NotFound;
     SendReceipt send_receipt{};
     send_receipt.message = std::move(message);
@@ -310,7 +310,7 @@ void ProducerImpl::setTransactionChecker(TransactionChecker checker) {
 void ProducerImpl::sendImpl(std::shared_ptr<SendContext> context) {
   const std::string& target = urlOf(context->messageQueue());
   if (target.empty()) {
-    SPDLOG_WARN("Failed to resolve broker address from MessageQueue");
+    RMQLOG_WARN("Failed to resolve broker address from MessageQueue");
     std::error_code ec = ErrorCode::BadGateway;
     context->onFailure(ec);
     return;
@@ -438,7 +438,7 @@ bool ProducerImpl::endTransaction0(const MiniTransaction& transaction, Transacti
         span.AddAnnotation(ec.message());
         span.End();
       }
-      SPDLOG_WARN("Failed to send {} transaction request to {}. Cause: ", action, endpoint, ec.message());
+      RMQLOG_WARN("Failed to send {} transaction request to {}. Cause: ", action, endpoint, ec.message());
       success = false;
     } else {
       {
@@ -487,7 +487,7 @@ SendReceipt ProducerImpl::send(MessageConstPtr message, std::error_code& ec, Tra
 
   if (!message->group().empty()) {
     ec = ErrorCode::MessagePropertyConflictWithType;
-    SPDLOG_WARN("FIFO message may not be transactional");
+    RMQLOG_WARN("FIFO message may not be transactional");
     SendReceipt send_receipt{};
     send_receipt.message = std::move(message);
     return send_receipt;
@@ -495,7 +495,7 @@ SendReceipt ProducerImpl::send(MessageConstPtr message, std::error_code& ec, Tra
 
   if (message->deliveryTimestamp().time_since_epoch().count()) {
     ec = ErrorCode::MessagePropertyConflictWithType;
-    SPDLOG_WARN("Timed message may not be transactional");
+    RMQLOG_WARN("Timed message may not be transactional");
     SendReceipt send_receipt{};
     send_receipt.message = std::move(message);
     return send_receipt;
@@ -518,13 +518,13 @@ SendReceipt ProducerImpl::send(MessageConstPtr message, std::error_code& ec, Tra
 RecallReceipt ProducerImpl::recall(const std::string& topic, std::string& recall_handle, std::error_code& ec) noexcept {
   ensureRunning(ec);
   if (ec) {
-    SPDLOG_WARN("Producer is not running");
+    RMQLOG_WARN("Producer is not running");
     return RecallReceipt{};
   }
 
   auto topic_publish_info = getPublishInfo(topic);
   if (!topic_publish_info) {
-    SPDLOG_WARN("Route of topic[{}] is not found", topic);
+    RMQLOG_WARN("Route of topic[{}] is not found", topic);
     ec = ErrorCode::NotFound;
     return RecallReceipt{};
   }
@@ -533,14 +533,14 @@ RecallReceipt ProducerImpl::recall(const std::string& topic, std::string& recall
   absl::optional<std::string> message_group{};
 
   if (!topic_publish_info->selectMessageQueues(message_group, message_queue_list)) {
-    SPDLOG_WARN("Failed to select an addressable message queue for timer topic[{}]", topic);
+    RMQLOG_WARN("Failed to select an addressable message queue for timer topic[{}]", topic);
     ec = ErrorCode::NotFound;
     return RecallReceipt{};
   }
 
   const std::string& target = urlOf(message_queue_list.front());
   if (target.empty()) {
-    SPDLOG_WARN("Failed to resolve broker address from MessageQueue");
+    RMQLOG_WARN("Failed to resolve broker address from MessageQueue");
     ec = ErrorCode::BadGateway;
     return RecallReceipt{};
   }
@@ -662,7 +662,7 @@ void ProducerImpl::onOrphanedTransactionalMessage(MessageConstSharedPtr message)
     TransactionState state = transaction_checker_(*message);
     endTransaction0(transaction, state);
   } else {
-    SPDLOG_WARN("LocalTransactionStateChecker is unexpectedly nullptr");
+    RMQLOG_WARN("LocalTransactionStateChecker is unexpectedly nullptr");
   }
 }
 

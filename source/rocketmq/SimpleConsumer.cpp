@@ -57,7 +57,7 @@ void SimpleConsumer::receive(std::size_t limit,
       absl::MutexLock lk(mtx.get());
       if (code && code != ErrorCode::NoContent) {
         ec = code;
-        SPDLOG_WARN("Failed to receive message. Cause: {}", code.message());
+        RMQLOG_WARN("Failed to receive message. Cause: {}", code.message());
       }
       completed = true;
       messages.insert(messages.end(), result.begin(), result.end());

@@ -38,7 +38,7 @@
 #include "google/protobuf/util/time_util.h"
 #include "grpcpp/create_channel.h"
 #include "rocketmq/ErrorCode.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -81,17 +81,17 @@ ClientManagerImpl::ClientManagerImpl(std::string resource_namespace, bool with_s
 
   // channel_arguments_.SetSslTargetNameOverride("localhost");
 
-  SPDLOG_INFO("ClientManager[ResourceNamespace={}] created", resource_namespace_);
+  RMQLOG_INFO("ClientManager[ResourceNamespace={}] created", resource_namespace_);
 }
 
 ClientManagerImpl::~ClientManagerImpl() {
   shutdown();
-  SPDLOG_INFO("ClientManager[ResourceNamespace={}] destructed", resource_namespace_);
+  RMQLOG_INFO("ClientManager[ResourceNamespace={}] destructed", resource_namespace_);
 }
 
 void ClientManagerImpl::start() {
   if (State::CREATED != state_.load(std::memory_order_relaxed)) {
-    SPDLOG_WARN("Unexpected client instance state: {}", state_.load(std::memory_order_relaxed));
+    RMQLOG_WARN("Unexpected client instance state: {}", state_.load(std::memory_order_relaxed));
     return;
   }
 
@@ -109,15 +109,15 @@ void ClientManagerImpl::start() {
   };
   heartbeat_task_id_ = scheduler_->schedule(
       heartbeat_functor, HEARTBEAT_TASK_NAME, std::chrono::seconds(1), std::chrono::seconds(10));
-  SPDLOG_DEBUG("Heartbeat task-id={}", heartbeat_task_id_);
+  RMQLOG_DEBUG("Heartbeat task-id={}", heartbeat_task_id_);
 
   state_.store(State::STARTED, std::memory_order_relaxed);
 }
 
 void ClientManagerImpl::shutdown() {
-  SPDLOG_INFO("Client manager shutdown");
+  RMQLOG_INFO("Client manager shutdown");
   if (State::STARTED != state_.load(std::memory_order_relaxed)) {
-    SPDLOG_WARN("Unexpected client instance state: {}", state_.load(std::memory_order_relaxed));
+    RMQLOG_WARN("Unexpected client instance state: {}", state_.load(std::memory_order_relaxed));
     return;
   }
   state_.store(STOPPING, std::memory_order_relaxed);
@@ -133,11 +133,11 @@ void ClientManagerImpl::shutdown() {
   {
     absl::MutexLock lk(&rpc_clients_mtx_);
     rpc_clients_.clear();
-    SPDLOG_DEBUG("rpc_clients_ is clear");
+    RMQLOG_DEBUG("rpc_clients_ is clear");
   }
 
   state_.store(State::STOPPED, std::memory_order_relaxed);
-  SPDLOG_DEBUG("ClientManager stopped");
+  RMQLOG_DEBUG("ClientManager stopped");
 }
 
 std::vector<std::string> ClientManagerImpl::cleanOfflineRpcClients() {
@@ -159,7 +159,7 @@ std::vector<std::string> ClientManagerImpl::cleanOfflineRpcClients() {
     for (auto it = rpc_clients_.begin(); it != rpc_clients_.end();) {
       std::string host = it->first;
       if (it->second->needHeartbeat() && !hosts.contains(host)) {
-        SPDLOG_INFO("Removed RPC client whose peer is offline. RemoteHost={}", host);
+        RMQLOG_INFO("Removed RPC client whose peer is offline. RemoteHost={}", host);
         removed.push_back(host);
         rpc_clients_.erase(it++);
       } else {
@@ -176,7 +176,7 @@ void ClientManagerImpl::heartbeat(const std::string& target_host,
                                   const HeartbeatRequest& request,
                                   std::chrono::milliseconds timeout,
                                   const std::function<void(const std::error_code&, const HeartbeatResponse&)>& cb) {
-  SPDLOG_DEBUG("Prepare to send heartbeat to {}. Request: {}", target_host, request.ShortDebugString());
+  RMQLOG_DEBUG("Prepare to send heartbeat to {}. Request: {}", target_host, request.ShortDebugString());
   auto client = getRpcClient(target_host, true);
   auto invocation_context = new InvocationContext<HeartbeatResponse>();
   invocation_context->task_name = fmt::format("Heartbeat to {}", target_host);
@@ -187,7 +187,7 @@ void ClientManagerImpl::heartbeat(const std::string& target_host,
 
   auto callback = [cb](const InvocationContext<HeartbeatResponse>* invocation_context) {
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to send heartbeat to target_host={}. gRPC code: {}, message: {}",
+      RMQLOG_WARN("Failed to send heartbeat to target_host={}. gRPC code: {}, message: {}",
                   invocation_context->remote_address, invocation_context->status.error_code(),
                   invocation_context->status.error_message());
       std::error_code ec = ErrorCode::RequestTimeout;
@@ -204,48 +204,48 @@ void ClientManagerImpl::heartbeat(const std::string& target_host,
       }
 
       case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-        SPDLOG_ERROR("IllegalConsumerGroup: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalConsumerGroup: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalConsumerGroup;
         break;
       }
 
       case rmq::Code::TOO_MANY_REQUESTS: {
-        SPDLOG_WARN("TooManyRequest: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TooManyRequest: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::TooManyRequests;
         cb(ec, invocation_context->response);
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Unauthorized: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Unauthorized;
         cb(ec, invocation_context->response);
         break;
       }
 
       case rmq::Code::UNRECOGNIZED_CLIENT_TYPE: {
-        SPDLOG_ERROR("UnsupportedClientType: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("UnsupportedClientType: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::UnsupportedClientType;
         cb(ec, invocation_context->response);
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_ERROR("ClientIdRequired: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("ClientIdRequired: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalClientError;
         cb(ec, invocation_context->response);
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalServerError;
         cb(ec, invocation_context->response);
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: Please upgrade SDK to latest release. Message={}, host={}", status.message(),
+        RMQLOG_WARN("NotSupported: Please upgrade SDK to latest release. Message={}, host={}", status.message(),
                     invocation_context->remote_address);
         ec = ErrorCode::NotSupported;
         cb(ec, invocation_context->response);
@@ -262,7 +262,7 @@ void ClientManagerImpl::heartbeat(const std::string& target_host,
 void ClientManagerImpl::doHeartbeat() {
   if (State::STARTED != state_.load(std::memory_order_relaxed) &&
       State::STARTING != state_.load(std::memory_order_relaxed)) {
-    SPDLOG_WARN("Unexpected client manager state={}.", state_.load(std::memory_order_relaxed));
+    RMQLOG_WARN("Unexpected client manager state={}.", state_.load(std::memory_order_relaxed));
     return;
   }
 
@@ -282,7 +282,7 @@ bool ClientManagerImpl::send(const std::string& target_host,
                              SendMessageRequest& request,
                              SendResultCallback cb) {
   assert(cb);
-  SPDLOG_DEBUG("Prepare to send message to {} asynchronously. Request: {}", target_host, request.ShortDebugString());
+  RMQLOG_DEBUG("Prepare to send message to {} asynchronously. Request: {}", target_host, request.ShortDebugString());
   RpcClientSharedPtr client = getRpcClient(target_host);
   // Invocation context will be deleted in its onComplete() method.
   auto invocation_context = new InvocationContext<SendMessageResponse>();
@@ -309,7 +309,7 @@ bool ClientManagerImpl::send(const std::string& target_host,
     SendResult send_result = {};
     send_result.target = target_host;
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to send message to {} due to gRPC error. gRPC code: {}, gRPC error message: {}",
+      RMQLOG_WARN("Failed to send message to {} due to gRPC error. gRPC code: {}, gRPC error message: {}",
                   invocation_context->remote_address, invocation_context->status.error_code(),
                   invocation_context->status.error_message());
       send_result.ec = ErrorCode::RequestTimeout;
@@ -328,140 +328,140 @@ bool ClientManagerImpl::send(const std::string& target_host,
           // only delay message is supported for now
           send_result.recall_handle = first->recall_handle();
         } else {
-          SPDLOG_ERROR("Unexpected send-message-response: {}", invocation_context->response.ShortDebugString());
+          RMQLOG_ERROR("Unexpected send-message-response: {}", invocation_context->response.ShortDebugString());
         }
         break;
       }
 
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_ERROR("IllegalTopic: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalTopic: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::ILLEGAL_MESSAGE_TAG: {
-        SPDLOG_ERROR("IllegalMessageTag: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalMessageTag: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::IllegalMessageTag;
         break;
       }
 
       case rmq::Code::ILLEGAL_MESSAGE_KEY: {
-        SPDLOG_ERROR("IllegalMessageKey: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalMessageKey: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::IllegalMessageKey;
         break;
       }
 
       case rmq::Code::ILLEGAL_MESSAGE_GROUP: {
-        SPDLOG_ERROR("IllegalMessageGroup: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalMessageGroup: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::IllegalMessageGroup;
         break;
       }
 
       case rmq::Code::ILLEGAL_MESSAGE_PROPERTY_KEY: {
-        SPDLOG_ERROR("IllegalMessageProperty: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalMessageProperty: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::IllegalMessageProperty;
         break;
       }
 
       case rmq::Code::ILLEGAL_DELIVERY_TIME: {
-        SPDLOG_ERROR("IllegalDeliveryTime: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("IllegalDeliveryTime: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::IllegalMessageProperty;
         break;
       }
 
       case rmq::Code::MESSAGE_PROPERTIES_TOO_LARGE: {
-        SPDLOG_ERROR("MessagePropertiesTooLarge: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("MessagePropertiesTooLarge: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::MessagePropertiesTooLarge;
         break;
       }
 
       case rmq::Code::MESSAGE_BODY_TOO_LARGE: {
-        SPDLOG_ERROR("MessageBodyTooLarge: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("MessageBodyTooLarge: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::MessageBodyTooLarge;
         break;
       }
 
       case rmq::Code::MESSAGE_BODY_EMPTY: {
-        SPDLOG_ERROR("MessageBodyEmpty: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("MessageBodyEmpty: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::MessageBodyTooLarge;
         break;
       }
 
       case rmq::Code::TOPIC_NOT_FOUND: {
-        SPDLOG_WARN("TopicNotFound: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TopicNotFound: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::TopicNotFound;
         break;
       }
 
       case rmq::Code::NOT_FOUND: {
-        SPDLOG_WARN("NotFound: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("NotFound: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::NotFound;
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthenticated: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Unauthenticated: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::Unauthorized;
         break;
       }
 
       case rmq::Code::FORBIDDEN: {
-        SPDLOG_WARN("Forbidden: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Forbidden: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::Forbidden;
         break;
       }
 
       case rmq::Code::MESSAGE_CORRUPTED: {
-        SPDLOG_WARN("MessageCorrupted: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("MessageCorrupted: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::MessageCorrupted;
         break;
       }
 
       case rmq::Code::TOO_MANY_REQUESTS: {
-        SPDLOG_WARN("TooManyRequest: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TooManyRequest: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::TooManyRequests;
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::HA_NOT_AVAILABLE: {
-        SPDLOG_WARN("InternalServerError: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::PROXY_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       case rmq::Code::MASTER_PERSISTENCE_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       case rmq::Code::SLAVE_PERSISTENCE_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
         send_result.ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       case rmq::Code::MESSAGE_PROPERTY_CONFLICT_WITH_TYPE: {
-        SPDLOG_WARN("Message-property-conflict-with-type: Host={}, Response={}", invocation_context->remote_address,
+        RMQLOG_WARN("Message-property-conflict-with-type: Host={}, Response={}", invocation_context->remote_address,
                     invocation_context->response.ShortDebugString());
         send_result.ec = ErrorCode::MessagePropertyConflictWithType;
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: Check and upgrade SDK to the latest. Host={}", invocation_context->remote_address);
+        RMQLOG_WARN("NotSupported: Check and upgrade SDK to the latest. Host={}", invocation_context->remote_address);
         send_result.ec = ErrorCode::NotSupported;
         break;
       }
@@ -497,9 +497,9 @@ RpcClientSharedPtr ClientManagerImpl::getRpcClient(const std::string& target_hos
     auto search = rpc_clients_.find(target_host);
     if (search == rpc_clients_.end() || !search->second->ok()) {
       if (search == rpc_clients_.end()) {
-        SPDLOG_INFO("Create a RPC client to [{}]", target_host.data());
+        RMQLOG_INFO("Create a RPC client to [{}]", target_host.data());
       } else if (!search->second->ok()) {
-        SPDLOG_INFO("Prior RPC client to {} is not OK. Re-create one", target_host);
+        RMQLOG_INFO("Prior RPC client to {} is not OK. Re-create one", target_host);
       }
       auto channel = createChannel(target_host);
       std::weak_ptr<ClientManager> client_manager(shared_from_this());
@@ -563,11 +563,11 @@ void ClientManagerImpl::resolveRoute(const std::string& target_host,
                                      const QueryRouteRequest& request,
                                      std::chrono::milliseconds timeout,
                                      const std::function<void(const std::error_code&, const TopicRouteDataPtr&)>& cb) {
-  SPDLOG_DEBUG("Name server connection URL: {}", target_host);
-  SPDLOG_DEBUG("Query route request: {}", request.ShortDebugString());
+  RMQLOG_DEBUG("Name server connection URL: {}", target_host);
+  RMQLOG_DEBUG("Query route request: {}", request.ShortDebugString());
   RpcClientSharedPtr client = getRpcClient(target_host, false);
   if (!client) {
-    SPDLOG_WARN("Failed to create RPC client for name server[host={}]", target_host);
+    RMQLOG_WARN("Failed to create RPC client for name server[host={}]", target_host);
     std::error_code ec = ErrorCode::RequestTimeout;
     cb(ec, nullptr);
     return;
@@ -583,7 +583,7 @@ void ClientManagerImpl::resolveRoute(const std::string& target_host,
 
   auto callback = [cb](const InvocationContext<QueryRouteResponse>* invocation_context) {
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to send query route request to server[host={}]. Reason: {}",
+      RMQLOG_WARN("Failed to send query route request to server[host={}]. Reason: {}",
                   invocation_context->remote_address, invocation_context->status.error_message());
       std::error_code ec = ErrorCode::RequestTimeout;
       cb(ec, nullptr);
@@ -604,56 +604,56 @@ void ClientManagerImpl::resolveRoute(const std::string& target_host,
       }
 
       case rmq::Code::ILLEGAL_ACCESS_POINT: {
-        SPDLOG_WARN("IllegalAccessPoint: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("IllegalAccessPoint: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalAccessPoint;
         cb(ec, nullptr);
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Unauthorized: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Unauthorized;
         cb(ec, nullptr);
         break;
       }
 
       case rmq::Code::TOPIC_NOT_FOUND: {
-        SPDLOG_WARN("TopicNotFound: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TopicNotFound: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::NotFound;
         cb(ec, nullptr);
         break;
       }
 
       case rmq::Code::TOO_MANY_REQUESTS: {
-        SPDLOG_WARN("TooManyRequest: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TooManyRequest: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::TooManyRequests;
         cb(ec, nullptr);
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_ERROR("ClientIdRequired: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_ERROR("ClientIdRequired: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalClientError;
         cb(ec, nullptr);
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalServerError;
         cb(ec, nullptr);
         break;
       }
 
       case rmq::Code::PROXY_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::GatewayTimeout;
         cb(ec, nullptr);
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotImplement: Please upgrade to latest SDK release. Host={}", invocation_context->remote_address);
+        RMQLOG_WARN("NotImplement: Please upgrade to latest SDK release. Host={}", invocation_context->remote_address);
         ec = ErrorCode::NotImplemented;
         cb(ec, nullptr);
         break;
@@ -670,12 +670,12 @@ void ClientManagerImpl::queryAssignment(
     const QueryAssignmentRequest& request,
     std::chrono::milliseconds timeout,
     const std::function<void(const std::error_code&, const QueryAssignmentResponse&)>& cb) {
-  SPDLOG_DEBUG("Prepare to send query assignment request to broker[address={}]", target);
+  RMQLOG_DEBUG("Prepare to send query assignment request to broker[address={}]", target);
   std::shared_ptr<RpcClient> client = getRpcClient(target);
 
   auto callback = [&, cb](const InvocationContext<QueryAssignmentResponse>* invocation_context) {
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to query assignment. Reason: {}", invocation_context->status.error_message());
+      RMQLOG_WARN("Failed to query assignment. Reason: {}", invocation_context->status.error_message());
       std::error_code ec = ErrorCode::RequestTimeout;
       cb(ec, invocation_context->response);
       return;
@@ -685,72 +685,72 @@ void ClientManagerImpl::queryAssignment(
     std::error_code ec;
     switch (status.code()) {
       case rmq::Code::OK: {
-        SPDLOG_DEBUG("Query assignment OK. Host={}", invocation_context->remote_address);
+        RMQLOG_DEBUG("Query assignment OK. Host={}", invocation_context->remote_address);
         break;
       }
 
       case rmq::Code::ILLEGAL_ACCESS_POINT: {
-        SPDLOG_WARN("IllegalAccessPoint: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("IllegalAccessPoint: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalAccessPoint;
         break;
       }
 
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_WARN("IllegalAccessPoint: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("IllegalAccessPoint: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-        SPDLOG_WARN("IllegalConsumerGroup: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("IllegalConsumerGroup: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalConsumerGroup;
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_WARN("ClientIdRequired: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("ClientIdRequired: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalClientError;
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Unauthorized: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Unauthorized;
         break;
       }
 
       case rmq::Code::FORBIDDEN: {
-        SPDLOG_WARN("Forbidden: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Forbidden: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Forbidden;
         break;
       }
 
       case rmq::Code::TOPIC_NOT_FOUND: {
-        SPDLOG_WARN("TopicNotFound: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TopicNotFound: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::TopicNotFound;
         break;
       }
 
       case rmq::Code::CONSUMER_GROUP_NOT_FOUND: {
-        SPDLOG_WARN("ConsumerGroupNotFound: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("ConsumerGroupNotFound: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::ConsumerGroupNotFound;
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::PROXY_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("GatewayTimeout: {}. Host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: please upgrade SDK to latest release. Host={}", invocation_context->remote_address);
+        RMQLOG_WARN("NotSupported: please upgrade SDK to latest release. Host={}", invocation_context->remote_address);
         ec = ErrorCode::NotSupported;
         break;
       }
@@ -774,7 +774,7 @@ void ClientManagerImpl::receiveMessage(const std::string& target_host,
                                        const ReceiveMessageRequest& request,
                                        std::chrono::milliseconds timeout,
                                        ReceiveMessageCallback cb) {
-  SPDLOG_DEBUG("Prepare to receive message from {} asynchronously. Request: {}", target_host, request.ShortDebugString());
+  RMQLOG_DEBUG("Prepare to receive message from {} asynchronously. Request: {}", target_host, request.ShortDebugString());
   RpcClientSharedPtr client = getRpcClient(target_host);
   auto context = absl::make_unique<ReceiveMessageContext>();
   context->callback = std::move(cb);
@@ -822,7 +822,7 @@ MessageConstSharedPtr ClientManagerImpl::wrapMessage(const rmq::Message& item) {
   const rmq::Digest& digest = system_properties.body_digest();
   bool body_digest_match = false;
   if (item.body().empty()) {
-    SPDLOG_WARN("Body of message[topic={}, msgId={}] is empty", item.topic().name(),
+    RMQLOG_WARN("Body of message[topic={}, msgId={}] is empty", item.topic().name(),
                 item.system_properties().message_id());
     body_digest_match = true;
   } else {
@@ -833,12 +833,12 @@ MessageConstSharedPtr ClientManagerImpl::wrapMessage(const rmq::Message& item) {
         if (success) {
           body_digest_match = (digest.checksum() == checksum);
           if (body_digest_match) {
-            SPDLOG_DEBUG("Message body CRC32 checksum validation passed.");
+            RMQLOG_DEBUG("Message body CRC32 checksum validation passed.");
           } else {
-            SPDLOG_WARN("Body CRC32 checksum validation failed. Actual: {}, expect: {}", checksum, digest.checksum());
+            RMQLOG_WARN("Body CRC32 checksum validation failed. Actual: {}, expect: {}", checksum, digest.checksum());
           }
         } else {
-          SPDLOG_WARN("Failed to calculate CRC32 checksum. Skip.");
+          RMQLOG_WARN("Failed to calculate CRC32 checksum. Skip.");
         }
         break;
       }
@@ -848,13 +848,13 @@ MessageConstSharedPtr ClientManagerImpl::wrapMessage(const rmq::Message& item) {
         if (success) {
           body_digest_match = (digest.checksum() == checksum);
           if (body_digest_match) {
-            SPDLOG_DEBUG("Body of message[{}] MD5 checksum validation passed.", message_id);
+            RMQLOG_DEBUG("Body of message[{}] MD5 checksum validation passed.", message_id);
           } else {
-            SPDLOG_WARN("Body of message[{}] MD5 checksum validation failed. Expect: {}, Actual: {}", message_id,
+            RMQLOG_WARN("Body of message[{}] MD5 checksum validation failed. Expect: {}, Actual: {}", message_id,
                         digest.checksum(), checksum);
           }
         } else {
-          SPDLOG_WARN("Failed to calculate MD5 digest. Skip.");
+          RMQLOG_WARN("Failed to calculate MD5 digest. Skip.");
           body_digest_match = true;
         }
         break;
@@ -865,18 +865,18 @@ MessageConstSharedPtr ClientManagerImpl::wrapMessage(const rmq::Message& item) {
         if (success) {
           body_digest_match = (checksum == digest.checksum());
           if (body_digest_match) {
-            SPDLOG_DEBUG("Body of message[{}] SHA1 checksum validation passed", message_id);
+            RMQLOG_DEBUG("Body of message[{}] SHA1 checksum validation passed", message_id);
           } else {
-            SPDLOG_WARN("Body of message[{}] SHA1 checksum validation failed. Expect: {}, Actual: {}", message_id,
+            RMQLOG_WARN("Body of message[{}] SHA1 checksum validation failed. Expect: {}, Actual: {}", message_id,
                         digest.checksum(), checksum);
           }
         } else {
-          SPDLOG_WARN("Failed to calculate SHA1 digest for message[{}]. Skip.", message_id);
+          RMQLOG_WARN("Failed to calculate SHA1 digest for message[{}]. Skip.", message_id);
         }
         break;
       }
       default: {
-        SPDLOG_WARN("Unsupported message body digest algorithm");
+        RMQLOG_WARN("Unsupported message body digest algorithm");
         body_digest_match = true;
         break;
       }
@@ -884,7 +884,7 @@ MessageConstSharedPtr ClientManagerImpl::wrapMessage(const rmq::Message& item) {
   }
 
   if (!body_digest_match) {
-    SPDLOG_WARN("Message body checksum failed. MsgId={}", system_properties.message_id());
+    RMQLOG_WARN("Message body checksum failed. MsgId={}", system_properties.message_id());
     // TODO: NACK it immediately
     return nullptr;
   }
@@ -902,7 +902,7 @@ MessageConstSharedPtr ClientManagerImpl::wrapMessage(const rmq::Message& item) {
       break;
     }
     default: {
-      SPDLOG_WARN("Unsupported encoding algorithm");
+      RMQLOG_WARN("Unsupported encoding algorithm");
       break;
     }
   }
@@ -988,7 +988,7 @@ void ClientManagerImpl::ack(const std::string& target,
                             std::chrono::milliseconds timeout,
                             const std::function<void(const std::error_code&)>& cb) {
   std::string target_host(target.data(), target.length());
-  SPDLOG_DEBUG("Prepare to ack message against {} asynchronously. AckMessageRequest: {}", target_host,
+  RMQLOG_DEBUG("Prepare to ack message against {} asynchronously. AckMessageRequest: {}", target_host,
                request.DebugString());
   RpcClientSharedPtr client = getRpcClient(target_host);
 
@@ -1013,78 +1013,78 @@ void ClientManagerImpl::ack(const std::string& target,
     auto&& status = invocation_context->response.status();
     switch (status.code()) {
       case rmq::Code::OK: {
-        SPDLOG_DEBUG("Ack OK. host={}", invocation_context->remote_address);
+        RMQLOG_DEBUG("Ack OK. host={}", invocation_context->remote_address);
         break;
       }
 
       case rmq::Code::MULTIPLE_RESULTS: {
-        SPDLOG_DEBUG("Server returns multiple results. host={}", invocation_context->remote_address);
+        RMQLOG_DEBUG("Server returns multiple results. host={}", invocation_context->remote_address);
         // Treat it as successful, allowing top tier processing according to response entries.
         break;
       }
 
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_WARN("IllegalTopic: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("IllegalTopic: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-        SPDLOG_WARN("IllegalConsumerGroup: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("IllegalConsumerGroup: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::IllegalConsumerGroup;
         break;
       }
 
       case rmq::Code::INVALID_RECEIPT_HANDLE: {
-        SPDLOG_WARN("InvalidReceiptHandle: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InvalidReceiptHandle: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InvalidReceiptHandle;
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_WARN("ClientIdRequired: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("ClientIdRequired: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalClientError;
         break;
       }
 
       case rmq::Code::TOPIC_NOT_FOUND: {
-        SPDLOG_WARN("TopicNotFound: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TopicNotFound: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::TopicNotFound;
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Unauthorized: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Unauthorized;
         break;
       }
 
       case rmq::Code::FORBIDDEN: {
-        SPDLOG_WARN("PermissionDenied: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("PermissionDenied: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Forbidden;
         break;
       }
 
       case rmq::Code::TOO_MANY_REQUESTS: {
-        SPDLOG_WARN("TooManyRequests: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TooManyRequests: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::TooManyRequests;
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::PROXY_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("GatewayTimeout: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: please upgrade SDK to latest release. host={}", invocation_context->remote_address);
+        RMQLOG_WARN("NotSupported: please upgrade SDK to latest release. host={}", invocation_context->remote_address);
         ec = ErrorCode::NotSupported;
         break;
       }
@@ -1116,7 +1116,7 @@ void ClientManagerImpl::changeInvisibleDuration(
 
   auto callback = [completion_callback](const InvocationContext<ChangeInvisibleDurationResponse>* invocation_context) {
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to write Nack request to wire. gRPC-code: {}, gRPC-message: {}",
+      RMQLOG_WARN("Failed to write Nack request to wire. gRPC-code: {}, gRPC-message: {}",
                   invocation_context->status.error_code(), invocation_context->status.error_message());
       std::error_code ec = ErrorCode::RequestTimeout;
       completion_callback(ec, invocation_context->response);
@@ -1128,60 +1128,60 @@ void ClientManagerImpl::changeInvisibleDuration(
     auto&& peer_address = invocation_context->remote_address;
     switch (status.code()) {
       case rmq::Code::OK: {
-        SPDLOG_DEBUG("ChangeInvisibleDuration to {} OK", peer_address);
+        RMQLOG_DEBUG("ChangeInvisibleDuration to {} OK", peer_address);
         break;
       };
 
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_WARN("IllegalTopic: {}. Host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalTopic: {}. Host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-        SPDLOG_WARN("IllegalConsumerGroup: {}. Host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalConsumerGroup: {}. Host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalConsumerGroup;
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Unauthorized: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Unauthorized;
         break;
       }
 
       case rmq::Code::INVALID_RECEIPT_HANDLE: {
-        SPDLOG_WARN("InvalidReceiptHandle: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InvalidReceiptHandle: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InvalidReceiptHandle;
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_WARN("ClientIdRequired: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("ClientIdRequired: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalClientError;
         break;
       }
 
       case rmq::Code::FORBIDDEN: {
-        SPDLOG_WARN("Forbidden: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("Forbidden: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::Forbidden;
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("InternalServerError: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::TOO_MANY_REQUESTS: {
-        SPDLOG_WARN("TooManyRequests: {}, host={}", status.message(), invocation_context->remote_address);
+        RMQLOG_WARN("TooManyRequests: {}, host={}", status.message(), invocation_context->remote_address);
         ec = ErrorCode::TooManyRequests;
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: Please upgrade to latest SDK, host={}", invocation_context->remote_address);
+        RMQLOG_WARN("NotSupported: Please upgrade to latest SDK, host={}", invocation_context->remote_address);
         ec = ErrorCode::NotSupported;
         break;
       }
@@ -1200,14 +1200,14 @@ void ClientManagerImpl::endTransaction(
     const std::function<void(const std::error_code&, const EndTransactionResponse&)>& cb) {
   RpcClientSharedPtr client = getRpcClient(target_host);
   if (!client) {
-    SPDLOG_WARN("No RPC client for {}", target_host);
+    RMQLOG_WARN("No RPC client for {}", target_host);
     EndTransactionResponse response;
     std::error_code ec = ErrorCode::BadRequest;
     cb(ec, response);
     return;
   }
 
-  SPDLOG_DEBUG("Prepare to endTransaction. TargetHost={}, Request: {}", target_host.data(), request.DebugString());
+  RMQLOG_DEBUG("Prepare to endTransaction. TargetHost={}, Request: {}", target_host.data(), request.DebugString());
 
   auto invocation_context = new InvocationContext<EndTransactionResponse>();
   invocation_context->task_name = fmt::format("End transaction[{}] of message[] against {}", request.transaction_id(),
@@ -1224,7 +1224,7 @@ void ClientManagerImpl::endTransaction(
   auto callback = [target_host, cb](const InvocationContext<EndTransactionResponse>* invocation_context) {
     std::error_code ec;
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to write EndTransaction to wire. gRPC-code: {}, gRPC-message: {}, host={}",
+      RMQLOG_WARN("Failed to write EndTransaction to wire. gRPC-code: {}, gRPC-message: {}, host={}",
                   invocation_context->status.error_code(), invocation_context->status.error_message(),
                   invocation_context->remote_address);
       ec = ErrorCode::BadRequest;
@@ -1236,67 +1236,67 @@ void ClientManagerImpl::endTransaction(
     auto&& peer_address = invocation_context->remote_address;
     switch (status.code()) {
       case rmq::Code::OK: {
-        SPDLOG_DEBUG("endTransaction completed OK. Response: {}, host={}", invocation_context->response.DebugString(),
+        RMQLOG_DEBUG("endTransaction completed OK. Response: {}, host={}", invocation_context->response.DebugString(),
                      peer_address);
         break;
       }
 
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_WARN("IllegalTopic: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalTopic: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-        SPDLOG_WARN("IllegalConsumerGroup: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalConsumerGroup: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalConsumerGroup;
         break;
       }
 
       case rmq::Code::INVALID_TRANSACTION_ID: {
-        SPDLOG_WARN("InvalidTransactionId: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("InvalidTransactionId: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::InvalidTransactionId;
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_WARN("ClientIdRequired: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("ClientIdRequired: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::InternalClientError;
         break;
       }
 
       case rmq::Code::TOPIC_NOT_FOUND: {
-        SPDLOG_WARN("TopicNotFound: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("TopicNotFound: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::TopicNotFound;
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("Unauthorized: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::Unauthorized;
         break;
       }
 
       case rmq::Code::FORBIDDEN: {
-        SPDLOG_WARN("Forbidden: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("Forbidden: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::Forbidden;
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("InternalServerError: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::PROXY_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("GatewayTimeout: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: please upgrade SDK to latest release. {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("NotSupported: please upgrade SDK to latest release. {}, host={}", status.message(), peer_address);
         ec = ErrorCode::NotSupported;
         break;
       }
@@ -1312,11 +1312,11 @@ void ClientManagerImpl::recallMessage(const std::string& target_host, const Meta
                                       const RecallMessageRequest& request, std::chrono::milliseconds timeout,
                                       const std::function<void(const std::error_code&, const RecallMessageResponse&)>& cb) {
 
-  SPDLOG_DEBUG("RecallMessage Request: {}", request.ShortDebugString());
+  RMQLOG_DEBUG("RecallMessage Request: {}", request.ShortDebugString());
 
   RpcClientSharedPtr client = getRpcClient(target_host);
   if (!client) {
-    SPDLOG_WARN("No RPC client for {}", target_host);
+    RMQLOG_WARN("No RPC client for {}", target_host);
     RecallMessageResponse response;
     std::error_code ec = ErrorCode::BadRequest;
     cb(ec, response);
@@ -1337,7 +1337,7 @@ void ClientManagerImpl::recallMessage(const std::string& target_host, const Meta
 
     std::error_code ec;
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to write EndTransaction to wire. gRPC-code: {}, gRPC-message: {}, host={}",
+      RMQLOG_WARN("Failed to write EndTransaction to wire. gRPC-code: {}, gRPC-message: {}, host={}",
                   invocation_context->status.error_code(), invocation_context->status.error_message(),
                   invocation_context->remote_address);
       ec = ErrorCode::BadRequest;
@@ -1349,55 +1349,55 @@ void ClientManagerImpl::recallMessage(const std::string& target_host, const Meta
     auto&& peer_address = invocation_context->remote_address;
     switch (status.code()) {
       case rmq::Code::OK: {
-        SPDLOG_DEBUG("Recall message OK. Response: {}, host={}",
+        RMQLOG_DEBUG("Recall message OK. Response: {}, host={}",
                      invocation_context->response.ShortDebugString(), peer_address);
         break;
       }
 
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_WARN("IllegalTopic: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalTopic: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_WARN("ClientIdRequired: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("ClientIdRequired: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::InternalClientError;
         break;
       }
 
       case rmq::Code::TOPIC_NOT_FOUND: {
-        SPDLOG_WARN("TopicNotFound: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("TopicNotFound: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::TopicNotFound;
         break;
       }
 
       case rmq::Code::UNAUTHORIZED: {
-        SPDLOG_WARN("Unauthorized: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("Unauthorized: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::Unauthorized;
         break;
       }
 
       case rmq::Code::FORBIDDEN: {
-        SPDLOG_WARN("Forbidden: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("Forbidden: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::Forbidden;
         break;
       }
 
       case rmq::Code::INTERNAL_SERVER_ERROR: {
-        SPDLOG_WARN("InternalServerError: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("InternalServerError: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::InternalServerError;
         break;
       }
 
       case rmq::Code::PROXY_TIMEOUT: {
-        SPDLOG_WARN("GatewayTimeout: {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("GatewayTimeout: {}, host={}", status.message(), peer_address);
         ec = ErrorCode::GatewayTimeout;
         break;
       }
 
       default: {
-        SPDLOG_WARN("NotSupported: please upgrade SDK to latest release. {}, host={}", status.message(), peer_address);
+        RMQLOG_WARN("NotSupported: please upgrade SDK to latest release. {}, host={}", status.message(), peer_address);
         ec = ErrorCode::NotSupported;
         break;
       }
@@ -1414,7 +1414,7 @@ void ClientManagerImpl::forwardMessageToDeadLetterQueue(const std::string& targe
                                                         const ForwardMessageToDeadLetterQueueRequest& request,
                                                         std::chrono::milliseconds timeout,
                                                         const std::function<void(const std::error_code&)>& cb) {
-  SPDLOG_DEBUG("ForwardMessageToDeadLetterQueue Request: {}", request.DebugString());
+  RMQLOG_DEBUG("ForwardMessageToDeadLetterQueue Request: {}", request.DebugString());
   auto client = getRpcClient(target_host);
   auto invocation_context = new InvocationContext<ForwardMessageToDeadLetterQueueResponse>();
   invocation_context->task_name =
@@ -1428,14 +1428,14 @@ void ClientManagerImpl::forwardMessageToDeadLetterQueue(const std::string& targe
 
   auto callback = [cb](const InvocationContext<ForwardMessageToDeadLetterQueueResponse>* invocation_context) {
     if (!invocation_context->status.ok()) {
-      SPDLOG_WARN("Failed to transmit SendMessageToDeadLetterQueueRequest to host={}",
+      RMQLOG_WARN("Failed to transmit SendMessageToDeadLetterQueueRequest to host={}",
                   invocation_context->remote_address);
       std::error_code ec = ErrorCode::BadRequest;
       cb(ec);
       return;
     }
 
-    SPDLOG_DEBUG("Received forwardToDeadLetterQueue response from server[host={}]", invocation_context->remote_address);
+    RMQLOG_DEBUG("Received forwardToDeadLetterQueue response from server[host={}]", invocation_context->remote_address);
     std::error_code ec;
     auto&& status = invocation_context->response.status();
     auto&& peer_address = invocation_context->remote_address;
@@ -1444,25 +1444,25 @@ void ClientManagerImpl::forwardMessageToDeadLetterQueue(const std::string& targe
         break;
       }
       case rmq::Code::ILLEGAL_TOPIC: {
-        SPDLOG_WARN("IllegalTopic: {}. Host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalTopic: {}. Host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalTopic;
         break;
       }
 
       case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-        SPDLOG_WARN("IllegalConsumerGroup: {}. Host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalConsumerGroup: {}. Host={}", status.message(), peer_address);
         ec = ErrorCode::IllegalConsumerGroup;
         break;
       }
 
       case rmq::Code::INVALID_RECEIPT_HANDLE: {
-        SPDLOG_WARN("IllegalReceiptHandle: {}. Host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalReceiptHandle: {}. Host={}", status.message(), peer_address);
         ec = ErrorCode::InvalidReceiptHandle;
         break;
       }
 
       case rmq::Code::CLIENT_ID_REQUIRED: {
-        SPDLOG_WARN("IllegalTopic: {}. Host={}", status.message(), peer_address);
+        RMQLOG_WARN("IllegalTopic: {}. Host={}", status.message(), peer_address);
         ec = ErrorCode::InternalClientError;
         break;
       }
@@ -1506,7 +1506,7 @@ std::error_code ClientManagerImpl::notifyClientTermination(const std::string& ta
   std::error_code ec;
   auto client = getRpcClient(target_host);
   if (!client) {
-    SPDLOG_WARN("Failed to create RpcClient for host={}", target_host);
+    RMQLOG_WARN("Failed to create RpcClient for host={}", target_host);
     ec = ErrorCode::RequestTimeout;
     return ec;
   }
@@ -1517,13 +1517,13 @@ std::error_code ClientManagerImpl::notifyClientTermination(const std::string& ta
     context.AddMetadata(item.first, item.second);
   }
 
-  SPDLOG_DEBUG("NotifyClientTermination request: {}", request.DebugString());
+  RMQLOG_DEBUG("NotifyClientTermination request: {}", request.DebugString());
 
   NotifyClientTerminationResponse response;
   {
     grpc::Status status = client->notifyClientTermination(&context, request, &response);
     if (!status.ok()) {
-      SPDLOG_WARN("NotifyClientTermination failed. gRPC-code={}, gRPC-message={}, host={}", status.error_code(),
+      RMQLOG_WARN("NotifyClientTermination failed. gRPC-code={}, gRPC-message={}, host={}", status.error_code(),
                   status.error_message(), target_host);
       ec = ErrorCode::RequestTimeout;
       return ec;
@@ -1534,38 +1534,38 @@ std::error_code ClientManagerImpl::notifyClientTermination(const std::string& ta
 
   switch (status.code()) {
     case rmq::Code::OK: {
-      SPDLOG_DEBUG("NotifyClientTermination OK. host={}", target_host);
+      RMQLOG_DEBUG("NotifyClientTermination OK. host={}", target_host);
       break;
     }
 
     case rmq::Code::ILLEGAL_CONSUMER_GROUP: {
-      SPDLOG_ERROR("IllegalConsumerGroup: {}. Host={}", status.message(), target_host);
+      RMQLOG_ERROR("IllegalConsumerGroup: {}. Host={}", status.message(), target_host);
       ec = ErrorCode::IllegalConsumerGroup;
       break;
     }
 
     case rmq::Code::INTERNAL_SERVER_ERROR: {
-      SPDLOG_WARN("InternalServerError: Cause={}, host={}", status.message(), target_host);
+      RMQLOG_WARN("InternalServerError: Cause={}, host={}", status.message(), target_host);
       ec = ErrorCode::InternalServerError;
       break;
     }
 
     case rmq::Code::UNAUTHORIZED: {
-      SPDLOG_WARN("Unauthorized due to lack of valid authentication credentials: Cause={}, host={}", status.message(),
+      RMQLOG_WARN("Unauthorized due to lack of valid authentication credentials: Cause={}, host={}", status.message(),
                   target_host);
       ec = ErrorCode::Unauthorized;
       break;
     }
 
     case rmq::Code::FORBIDDEN: {
-      SPDLOG_WARN("Forbidden due to insufficient permission to the resource: Cause={}, host={}", status.message(),
+      RMQLOG_WARN("Forbidden due to insufficient permission to the resource: Cause={}, host={}", status.message(),
                   target_host);
       ec = ErrorCode::Forbidden;
       break;
     }
 
     default: {
-      SPDLOG_WARN("NotSupported. Please upgrade to latest SDK release. host={}", target_host);
+      RMQLOG_WARN("NotSupported. Please upgrade to latest SDK release. host={}", target_host);
       ec = ErrorCode::NotSupported;
       break;
     }

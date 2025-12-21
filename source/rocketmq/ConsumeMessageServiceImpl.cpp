@@ -24,7 +24,6 @@
 #include "ThreadPoolImpl.h"
 #include "rocketmq/ErrorCode.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -82,7 +81,7 @@ void ConsumeMessageServiceImpl::dispatch(std::shared_ptr<ProcessQueue> process_q
         }
       }
 
-      SPDLOG_INFO("FifoConsumeService accelerator enable, message_count={}, group_count={}",
+      RMQLOG_INFO("FifoConsumeService accelerator enable, message_count={}, group_count={}",
                   messages.size(), grouped_messages.size() + (ungrouped_messages.empty() ? 0 : 1));
 
       // C++17 could use [group, msg_list]
@@ -134,7 +133,7 @@ void ConsumeMessageServiceImpl::ack(const Message& message, std::function<void(c
 
     // If the receipt_handle was already expired, it is safe to treat it as success.
     if (ec == ErrorCode::InvalidReceiptHandle) {
-      SPDLOG_WARN("Broker complained bad receipt handle on ack message[MsgId={}, ReceiptHandle={}]", message_id,
+      RMQLOG_WARN("Broker complained bad receipt handle on ack message[MsgId={}, ReceiptHandle={}]", message_id,
                   receipt_handle);
       cb(ErrorCode::Success);
       return;
@@ -168,7 +167,7 @@ void ConsumeMessageServiceImpl::schedule(std::shared_ptr<ConsumeTask> task, std:
 std::size_t ConsumeMessageServiceImpl::maxDeliveryAttempt() {
   std::shared_ptr<PushConsumerImpl> consumer = consumer_.lock();
   if (!consumer) {
-    SPDLOG_WARN("The consumer has already destructed");
+    RMQLOG_WARN("The consumer has already destructed");
     return 0;
   }
 

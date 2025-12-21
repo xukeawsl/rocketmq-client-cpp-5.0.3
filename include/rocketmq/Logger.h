@@ -24,9 +24,52 @@
 #include <thread>
 
 #include "RocketMQ.h"
+#include "spdlog/spdlog.h"
 
-#ifndef SPDLOG_ACTIVE_LEVEL
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#ifndef RMQLOG_ACTIVE_LEVEL
+#define RMQLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#endif
+
+#define RMQLOGGER "rocketmq_logger"
+
+#if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+#    define RMQLOG_LOGGER_TRACE(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::trace, __VA_ARGS__)
+#    define RMQLOG_TRACE(...) RMQLOG_LOGGER_TRACE(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#else
+#    define RMQLOG_LOGGER_TRACE(logger, ...) (void)0
+#    define RMQLOG_TRACE(...) (void)0
+#endif
+
+#if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
+#    define RMQLOG_LOGGER_DEBUG(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::debug, __VA_ARGS__)
+#    define RMQLOG_DEBUG(...) RMQLOG_LOGGER_DEBUG(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#else
+#    define RMQLOG_LOGGER_DEBUG(logger, ...) (void)0
+#    define RMQLOG_DEBUG(...) (void)0
+#endif
+
+#if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_INFO
+#    define RMQLOG_LOGGER_INFO(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::info, __VA_ARGS__)
+#    define RMQLOG_INFO(...) RMQLOG_LOGGER_INFO(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#else
+#    define RMQLOG_LOGGER_INFO(logger, ...) (void)0
+#    define RMQLOG_INFO(...) (void)0
+#endif
+
+#if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_WARN
+#    define RMQLOG_LOGGER_WARN(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::warn, __VA_ARGS__)
+#    define RMQLOG_WARN(...) RMQLOG_LOGGER_WARN(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#else
+#    define RMQLOG_LOGGER_WARN(logger, ...) (void)0
+#    define RMQLOG_WARN(...) (void)0
+#endif
+
+#if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_ERROR
+#    define RMQLOG_LOGGER_ERROR(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::err, __VA_ARGS__)
+#    define RMQLOG_ERROR(...) RMQLOG_LOGGER_ERROR(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#else
+#    define RMQLOG_LOGGER_ERROR(logger, ...) (void)0
+#    define RMQLOG_ERROR(...) (void)0
 #endif
 
 ROCKETMQ_NAMESPACE_BEGIN
@@ -37,7 +80,8 @@ enum class Level : uint8_t
   Debug = 1,
   Info = 2,
   Warn = 3,
-  Error = 4
+  Error = 4,
+  Off = 5
 };
 
 class Logger {
@@ -57,6 +101,8 @@ public:
    * @param level
    */
   virtual void setConsoleLevel(Level level) = 0;
+
+  virtual void setLogHome(const std::string& log_home) = 0;
 
   virtual void setFileSize(std::size_t file_size) = 0;
 

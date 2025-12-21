@@ -27,7 +27,7 @@
 #include "rocketmq/RocketMQ.h"
 #include "rocketmq/SendCallback.h"
 #include "rocketmq/SendReceipt.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -35,7 +35,7 @@ void FifoProducerPartition::add(FifoContext&& context) {
   {
     absl::MutexLock lk(&messages_mtx_);
     messages_.emplace_back(std::move(context));
-    SPDLOG_DEBUG("{} has {} pending messages after #add", name_, messages_.size());
+    RMQLOG_DEBUG("{} has {} pending messages after #add", name_, messages_.size());
   }
 
   trySend();
@@ -47,7 +47,7 @@ void FifoProducerPartition::trySend() {
     absl::MutexLock lk(&messages_mtx_);
 
     if (messages_.empty()) {
-      SPDLOG_DEBUG("There is no more messages to send");
+      RMQLOG_DEBUG("There is no more messages to send");
       return;
     }
 
@@ -59,20 +59,20 @@ void FifoProducerPartition::trySend() {
     auto fifo_callback = [=](const std::error_code& ec, const SendReceipt& receipt) mutable {
       partition->onComplete(ec, receipt, send_callback);
     };
-    SPDLOG_DEBUG("Sending FIFO message from {}", name_);
+    RMQLOG_DEBUG("Sending FIFO message from {}", name_);
     producer_->send(std::move(message), fifo_callback);
     messages_.pop_front();
-    SPDLOG_DEBUG("In addition to the inflight one, there is {} messages pending in {}", messages_.size(), name_);
+    RMQLOG_DEBUG("In addition to the inflight one, there is {} messages pending in {}", messages_.size(), name_);
   } else {
-    SPDLOG_DEBUG("There is an inflight message");
+    RMQLOG_DEBUG("There is an inflight message");
   }
 }
 
 void FifoProducerPartition::onComplete(const std::error_code& ec, const SendReceipt& receipt, SendCallback& callback) {
   if (ec) {
-    SPDLOG_INFO("{} completed with a failure: {}", name_, ec.message());
+    RMQLOG_INFO("{} completed with a failure: {}", name_, ec.message());
   } else {
-    SPDLOG_DEBUG("{} completed OK", name_);
+    RMQLOG_DEBUG("{} completed OK", name_);
   }
 
   if (!ec) {
@@ -82,7 +82,7 @@ void FifoProducerPartition::onComplete(const std::error_code& ec, const SendRece
     if (inflight_.compare_exchange_strong(expected, false, std::memory_order_relaxed)) {
       trySend();
     } else {
-      SPDLOG_ERROR("{}: Unexpected inflight status", name_);
+      RMQLOG_ERROR("{}: Unexpected inflight status", name_);
     }
     return;
   }
@@ -100,7 +100,7 @@ void FifoProducerPartition::onComplete(const std::error_code& ec, const SendRece
   if (inflight_.compare_exchange_strong(expected, false, std::memory_order_relaxed)) {
     trySend();
   } else {
-    SPDLOG_ERROR("Unexpected inflight status");
+    RMQLOG_ERROR("Unexpected inflight status");
   }
 }
 

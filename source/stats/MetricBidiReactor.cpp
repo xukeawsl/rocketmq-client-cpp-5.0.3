@@ -21,7 +21,6 @@
 #include "OpencensusExporter.h"
 #include "Signature.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -37,7 +36,7 @@ MetricBidiReactor::MetricBidiReactor(std::shared_ptr<Client> client, std::shared
 
   auto exporter_ptr = exporter_.lock();
   if (!exporter_ptr) {
-    SPDLOG_WARN("Exporter has already been destructed");
+    RMQLOG_WARN("Exporter has already been destructed");
     return;
   }
   exporter_ptr->stub()->async()->Export(&context_, this);
@@ -47,12 +46,12 @@ MetricBidiReactor::MetricBidiReactor(std::shared_ptr<Client> client, std::shared
 
 void MetricBidiReactor::OnReadDone(bool ok) {
   if (!ok) {
-    SPDLOG_WARN("Failed to read response");
+    RMQLOG_WARN("Failed to read response");
     // match the AddHold() call in MetricBidiReactor::fireRead
     RemoveHold();
     return;
   }
-  SPDLOG_DEBUG("OnReadDone OK");
+  RMQLOG_DEBUG("OnReadDone OK");
   StartRead(&response_);
 }
 
@@ -60,18 +59,18 @@ void MetricBidiReactor::OnWriteDone(bool ok) {
   {
     bool expected = true;
     if (!inflight_.compare_exchange_strong(expected, false, std::memory_order_relaxed)) {
-      SPDLOG_WARN("Illegal command-inflight state");
+      RMQLOG_WARN("Illegal command-inflight state");
       return;
     }
   }
 
   if (!ok) {
-    SPDLOG_WARN("Failed to report metrics");
+    RMQLOG_WARN("Failed to report metrics");
     // match AddHold() call in MetricBidiReactor::MetricBidiReactor
     RemoveHold();
     return;
   }
-  SPDLOG_DEBUG("OnWriteDone OK");
+  RMQLOG_DEBUG("OnWriteDone OK");
 
   // If the read stream has not started yet, start it now.
   fireRead();
@@ -92,9 +91,9 @@ void MetricBidiReactor::OnDone(const grpc::Status& s) {
   }
 
   if (s.ok()) {
-    SPDLOG_DEBUG("Bi-directional stream ended. status.code={}, status.message={}", s.error_code(), s.error_message());
+    RMQLOG_DEBUG("Bi-directional stream ended. status.code={}, status.message={}", s.error_code(), s.error_message());
   } else {
-    SPDLOG_WARN("Bi-directional stream ended. status.code={}, status.message={}", s.error_code(), s.error_message());
+    RMQLOG_WARN("Bi-directional stream ended. status.code={}, status.message={}", s.error_code(), s.error_message());
     auto exporter = exporter_.lock();
     if (exporter) {
       exporter->resetStream();
@@ -103,7 +102,7 @@ void MetricBidiReactor::OnDone(const grpc::Status& s) {
 }
 
 void MetricBidiReactor::write(ExportMetricsServiceRequest request) {
-  SPDLOG_DEBUG("Append ExportMetricsServiceRequest to buffer");
+  RMQLOG_DEBUG("Append ExportMetricsServiceRequest to buffer");
   {
     absl::MutexLock lk(&requests_mtx_);
     requests_.push_back(std::move(request));
@@ -116,7 +115,7 @@ void MetricBidiReactor::tryWriteNext() {
   {
     absl::MutexLock lk(&requests_mtx_);
     if (requests_.empty()) {
-      SPDLOG_DEBUG("No more metric data to write");
+      RMQLOG_DEBUG("No more metric data to write");
       return;
     }
   }
@@ -124,7 +123,7 @@ void MetricBidiReactor::tryWriteNext() {
   bool expected = false;
   if (inflight_.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
     absl::MutexLock lk(&requests_mtx_);
-    SPDLOG_DEBUG("MetricBidiReactor#StartWrite");
+    RMQLOG_DEBUG("MetricBidiReactor#StartWrite");
     StartWrite(&(requests_.front()));
   }
 }

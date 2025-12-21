@@ -19,7 +19,6 @@
 #include "absl/strings/str_split.h"
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -34,7 +33,7 @@ StaticNameServerResolver::StaticNameServerResolver(absl::string_view name_server
   std::vector<std::string> segments = absl::StrSplit(name_server_list, absl::ByAnyChar(",;"));
   name_server_address_ = naming_scheme_.buildAddress(segments);
   if (name_server_address_.empty()) {
-    SPDLOG_WARN("Failed to create gRPC naming scheme compliant address from {}",
+    RMQLOG_WARN("Failed to create gRPC naming scheme compliant address from {}",
                 std::string(name_server_list.data(), name_server_list.length()));
   }
 }

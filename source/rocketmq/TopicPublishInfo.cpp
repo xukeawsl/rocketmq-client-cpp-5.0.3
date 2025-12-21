@@ -20,7 +20,6 @@
 #include <utility>
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 #include "MixAll.h"
 #include "ProducerImpl.h"
 #include "TopicRouteData.h"
@@ -45,7 +44,7 @@ bool TopicPublishInfo::selectMessageQueues(absl::optional<std::string>     messa
   {
     absl::MutexLock lock(&queue_list_mtx_);
     if (queue_list_.empty()) {
-      SPDLOG_WARN("Failed to screen viable message queues from TopicPublishInfo because there is no candidates at all");
+      RMQLOG_WARN("Failed to screen viable message queues from TopicPublishInfo because there is no candidates at all");
       return false;
     }
   }
@@ -107,7 +106,7 @@ void TopicPublishInfo::updatePublishInfo() {
   }
 
   if (writable_queue_list.empty()) {
-    SPDLOG_WARN("No writable queue is current available. Skip updating publish table for topic={}", topic_);
+    RMQLOG_WARN("No writable queue is current available. Skip updating publish table for topic={}", topic_);
     return;
   }
 
@@ -118,7 +117,7 @@ void TopicPublishInfo::updatePublishInfo() {
 }
 
 void TopicPublishInfo::topicRouteData(TopicRouteDataPtr topic_route_data) {
-  SPDLOG_DEBUG("Update publish info according to renewed route data of topic={}", topic_);
+  RMQLOG_DEBUG("Update publish info according to renewed route data of topic={}", topic_);
   topic_route_data_ = std::move(topic_route_data);
   updatePublishInfo();
 }

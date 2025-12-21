@@ -21,7 +21,6 @@
 #include "rocketmq/ErrorCode.h"
 #include "rocketmq/Logger.h"
 #include "rocketmq/SimpleConsumer.h"
-#include "spdlog/spdlog.h"
 
 using namespace ROCKETMQ_NAMESPACE;
 
@@ -36,8 +35,9 @@ int main(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   auto& logger = getLogger();
-  logger.setConsoleLevel(Level::Info);
-  logger.setLevel(Level::Info);
+  logger.setLogHome("./logs/rocketmq_client.log");
+  logger.setConsoleLevel(Level::Off);
+  logger.setLevel(Level::Error);
   logger.init();
 
   std::string tag = "*";
@@ -75,15 +75,15 @@ int main(int argc, char* argv[]) {
 
     for (const auto& message : messages) {
       std::string receipt_handle = message->extension().receipt_handle;
-      SPDLOG_INFO("Receive message, topic={}, message-id={}, receipt-handle={}]", message->topic(), message->id(), receipt_handle);
+      RMQLOG_INFO("Receive message, topic={}, message-id={}, receipt-handle={}]", message->topic(), message->id(), receipt_handle);
 
       if (total++ % 2 == 0) {
         // Consume message successfully then ack it
         simple_consumer.ack(*message, ec);
         if (ec) {
-          SPDLOG_ERROR("Failed to ack message. Cause: {}", ec.message());
+          RMQLOG_ERROR("Failed to ack message. Cause: {}", ec.message());
         } else {
-          SPDLOG_INFO("Ack message, topic={}, message-id={}, receipt-handle={}]", message->topic(), message->id(), receipt_handle);
+          RMQLOG_INFO("Ack message, topic={}, message-id={}, receipt-handle={}]", message->topic(), message->id(), receipt_handle);
         }
       } else {
         // Extend the message consumption time by modifying the invisible duration API
@@ -91,9 +91,9 @@ int main(int argc, char* argv[]) {
           simple_consumer.changeInvisibleDuration(
               *message, receipt_handle, std::chrono::seconds(15), ec);
           if (ec) {
-            SPDLOG_WARN("Failed to change invisible duration of message. Cause: ", ec.message());
+            RMQLOG_WARN("Failed to change invisible duration of message. Cause: {}", ec.message());
           } else {
-            SPDLOG_INFO("Change invisible duration, topic={}, message-id={}, times={}, receipt-handle={}]",
+            RMQLOG_INFO("Change invisible duration, topic={}, message-id={}, times={}, receipt-handle={}]",
                         message->topic(), message->id(), k, receipt_handle);
           }
         }

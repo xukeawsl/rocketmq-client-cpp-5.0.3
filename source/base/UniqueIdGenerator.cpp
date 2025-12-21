@@ -18,7 +18,7 @@
 
 #include <cstring>
 
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 #include "MixAll.h"
 #include "UtilAll.h"
 #include "absl/base/internal/endian.h"
@@ -39,7 +39,7 @@ UniqueIdGenerator::UniqueIdGenerator()
   if (UtilAll::macAddress(mac_address)) {
     memcpy(prefix_.data(), mac_address.data(), mac_address.size());
   } else {
-    SPDLOG_WARN("Failed to get network interface MAC address");
+    RMQLOG_WARN("Failed to get network interface MAC address");
   }
 
 #ifdef _WIN32
@@ -66,7 +66,7 @@ std::string UniqueIdGenerator::next() {
     if (seconds_ != delta) {
       seconds_ = delta;
       sequence_ = 0;
-      SPDLOG_DEBUG("Second: {} and sequence: {}", seconds_, sequence_);
+      RMQLOG_DEBUG("Second: {} and sequence: {}", seconds_, sequence_);
     } else {
       sequence_++;
     }

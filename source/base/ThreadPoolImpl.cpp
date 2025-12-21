@@ -21,7 +21,7 @@
 #include "asio/post.hpp"
 #include "rocketmq/RocketMQ.h"
 #include "rocketmq/State.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 #include <atomic>
 #include <cstdint>
 #include <exception>
@@ -51,15 +51,15 @@ void ThreadPoolImpl::start() {
           std::error_code ec;
           context_.run(ec);
           if (ec) {
-            SPDLOG_WARN("Error raised from ThreadPool: {}", ec.message());
+            RMQLOG_WARN("Error raised from ThreadPool: {}", ec.message());
           }
 #ifdef __EXCEPTIONS
         } catch (std::exception& e) {
-          SPDLOG_WARN("Exception raised from ThreadPool: {}", e.what());
+          RMQLOG_WARN("Exception raised from ThreadPool: {}", e.what());
         }
 #endif
         if (State::STARTED != state_.load(std::memory_order_relaxed)) {
-          SPDLOG_DEBUG("One thread-pool worker quit");
+          RMQLOG_DEBUG("One thread-pool worker quit");
           break;
         }
       }
@@ -93,7 +93,7 @@ void ThreadPoolImpl::submit(std::function<void()> task) {
   if (State::STARTED == state_.load(std::memory_order_relaxed)) {
     asio::post(context_, task);
   } else {
-    SPDLOG_WARN("State of ThreadPool is not STARTED");
+    RMQLOG_WARN("State of ThreadPool is not STARTED");
   }
 }
 

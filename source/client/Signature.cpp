@@ -19,7 +19,7 @@
 #include "MetadataConstants.h"
 #include "Protocol.h"
 #include "TlsHelper.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -40,7 +40,7 @@ void Signature::sign(const ClientConfig& client, absl::flat_hash_map<std::string
   if (client.credentials_provider) {
     Credentials&& credentials = client.credentials_provider->getCredentials();
     if (credentials.accessKey().empty() || credentials.accessSecret().empty()) {
-      SPDLOG_WARN("Access credential is incomplete. Check your access key/secret.");
+      RMQLOG_WARN("Access credential is incomplete. Check your access key/secret.");
       return;
     }
 
@@ -62,7 +62,7 @@ void Signature::sign(const ClientConfig& client, absl::flat_hash_map<std::string
         .append(MetadataConstants::SIGNATURE_KEY)
         .append("=")
         .append(TlsHelper::sign(credentials.accessSecret(), request_date_time));
-    SPDLOG_DEBUG("Add authorization header: {}", authorization);
+    RMQLOG_DEBUG("Add authorization header: {}", authorization);
     metadata.insert({MetadataConstants::AUTHORIZATION, authorization});
 
     if (!credentials.sessionToken().empty()) {

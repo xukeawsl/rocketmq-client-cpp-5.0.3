@@ -36,7 +36,7 @@ void RpcClientImpl::asyncCallback(std::weak_ptr<RpcClient> client, BaseInvocatio
   invocation_context->status = std::move(status);
   std::shared_ptr<RpcClient> stub = client.lock();
   if (!stub) {
-    SPDLOG_WARN("RpcClient has destructed. Response Ignored");
+    RMQLOG_WARN("RpcClient has destructed. Response Ignored");
     // TODO: execute orphan callback in event-loop thread?
     // invocation_context->onCompletion(false);
     // or
@@ -47,7 +47,7 @@ void RpcClientImpl::asyncCallback(std::weak_ptr<RpcClient> client, BaseInvocatio
   std::weak_ptr<ClientManager> client_manager = stub->clientManager();
   std::shared_ptr<ClientManager> manager = client_manager.lock();
   if (!manager) {
-    SPDLOG_WARN("ClientManager has destructed. Response ignored");
+    RMQLOG_WARN("ClientManager has destructed. Response ignored");
     // TODO: execute orphan callback in event-loop thread?
     // invocation_context->onCompletion(false);
     // or

@@ -23,14 +23,18 @@
 #include "absl/strings/str_join.h"
 #include "google/protobuf/message.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
 void LogInterceptor::Intercept(grpc::experimental::InterceptorBatchMethods* methods) {
   InterceptorContinuation continuation(methods);
 
-  auto level = spdlog::default_logger()->level();
+  auto rocketmq_logger = spdlog::get(RMQLOGGER);
+  if (!rocketmq_logger) {
+    return;
+  }
+
+  auto level = rocketmq_logger->level();
   switch (level) {
     case spdlog::level::trace:
       // fall-through on purpose.
@@ -52,7 +56,7 @@ void LogInterceptor::Intercept(grpc::experimental::InterceptorBatchMethods* meth
   if (methods->QueryInterceptionHookPoint(grpc::experimental::InterceptionHookPoints::PRE_SEND_INITIAL_METADATA)) {
     std::multimap<std::string, std::string>* metadata = methods->GetSendInitialMetadata();
     if (metadata) {
-      SPDLOG_DEBUG("[Outbound]Headers of {}: {}", client_rpc_info_->method(),
+      RMQLOG_DEBUG("[Outbound]Headers of {}: {}", client_rpc_info_->method(),
                    absl::StrJoin(*metadata, " ", absl::PairFormatter(" --> ")));
     }
   }
@@ -60,7 +64,7 @@ void LogInterceptor::Intercept(grpc::experimental::InterceptorBatchMethods* meth
   if (methods->QueryInterceptionHookPoint(grpc::experimental::InterceptionHookPoints::PRE_SEND_MESSAGE)) {
     grpc::ByteBuffer* buffer = methods->GetSerializedSendMessage();
     if (buffer) {
-      SPDLOG_DEBUG("[Outbound] {}: Buffer: {}bytes", client_rpc_info_->method(), buffer->Length());
+      RMQLOG_DEBUG("[Outbound] {}: Buffer: {}bytes", client_rpc_info_->method(), buffer->Length());
     }
   }
 
@@ -73,10 +77,10 @@ void LogInterceptor::Intercept(grpc::experimental::InterceptorBatchMethods* meth
                                  absl::string_view(it.second.data(), it.second.length())});
       }
       if (!response_headers.empty()) {
-        SPDLOG_DEBUG("[Inbound]Response Headers of {}: {}", client_rpc_info_->method(),
+        RMQLOG_DEBUG("[Inbound]Response Headers of {}: {}", client_rpc_info_->method(),
                      absl::StrJoin(response_headers, " ", absl::PairFormatter(" --> ")));
       } else {
-        SPDLOG_DEBUG("[Inbound]Response metadata of {} is empty", client_rpc_info_->method());
+        RMQLOG_DEBUG("[Inbound]Response metadata of {} is empty", client_rpc_info_->method());
       }
     }
   }
@@ -88,9 +92,9 @@ void LogInterceptor::Intercept(grpc::experimental::InterceptorBatchMethods* meth
       std::string&& response_text = response->ShortDebugString();
       std::size_t limit = 1024;
       if (response_text.size() <= limit) {
-        SPDLOG_DEBUG("[Inbound] {} {}", client_rpc_info_->method(), response_text);
+        RMQLOG_DEBUG("[Inbound] {} {}", client_rpc_info_->method(), response_text);
       } else {
-        SPDLOG_DEBUG("[Inbound] {} {}...", client_rpc_info_->method(), response_text.substr(0, limit));
+        RMQLOG_DEBUG("[Inbound] {} {}...", client_rpc_info_->method(), response_text.substr(0, limit));
       }
     }
   }

@@ -31,7 +31,7 @@
 #include "asio/executor_work_guard.hpp"
 #include "asio/io_context.hpp"
 #include "asio/steady_timer.hpp"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -68,16 +68,16 @@ void SchedulerImpl::start() {
             std::error_code ec;
             context_.run(ec);
             if (ec) {
-              SPDLOG_WARN("Error raised from thread-pool: {}", ec.message());
+              RMQLOG_WARN("Error raised from thread-pool: {}", ec.message());
             }
 #ifdef __EXCEPTIONS
           } catch (std::exception& e) {
-            SPDLOG_WARN("Exception raised from thread-pool: {}", e.what());
+            RMQLOG_WARN("Exception raised from thread-pool: {}", e.what());
           }
 #endif
 
           if (State::STARTED != state_.load(std::memory_order_relaxed)) {
-            SPDLOG_DEBUG("One scheduler worker thread quit");
+            RMQLOG_DEBUG("One scheduler worker thread quit");
             break;
           }
         }
@@ -89,7 +89,7 @@ void SchedulerImpl::start() {
       absl::MutexLock lk(&start_mtx_);
       if (State::STARTING == state_.load(std::memory_order_relaxed)) {
         start_cv_.Wait(&start_mtx_);
-        SPDLOG_INFO("Scheduler threads start to loop");
+        RMQLOG_INFO("Scheduler threads start to loop");
       }
     }
   }
@@ -138,7 +138,7 @@ std::uint32_t SchedulerImpl::schedule(const std::function<void(void)>& functor, 
   task->task_id = id;
   task->timer = absl::make_unique<asio::steady_timer>(context_, delay);
   task->scheduler = shared_from_this();
-  SPDLOG_DEBUG("Timer-task[name={}] to fire in {}ms", task_name, delay.count());
+  RMQLOG_DEBUG("Timer-task[name={}] to fire in {}ms", task_name, delay.count());
   auto timer_task_weak_ptr = std::weak_ptr<TimerTask>(task);
   task->timer->async_wait(std::bind(&SchedulerImpl::execute, std::placeholders::_1, timer_task_weak_ptr));
   return id;
@@ -147,12 +147,12 @@ std::uint32_t SchedulerImpl::schedule(const std::function<void(void)>& functor, 
 void SchedulerImpl::cancel(std::uint32_t task_id) {
   absl::MutexLock lk(&tasks_mtx_);
   if (!tasks_.contains(task_id)) {
-    SPDLOG_ERROR("Scheduler does not have the task to delete. Task-ID specified is: {}", task_id);
+    RMQLOG_ERROR("Scheduler does not have the task to delete. Task-ID specified is: {}", task_id);
     return;
   }
   auto search = tasks_.find(task_id);
   assert(search != tasks_.end());
-  SPDLOG_INFO("Cancel task[task-id={}, name={}]", task_id, search->second->task_name);
+  RMQLOG_INFO("Cancel task[task-id={}, name={}]", task_id, search->second->task_name);
   tasks_.erase(search);
 }
 
@@ -162,7 +162,7 @@ void SchedulerImpl::execute(const asio::error_code& ec, std::weak_ptr<TimerTask>
     return;
   }
 
-  SPDLOG_INFO("Execute task: {}. Use-count: {}", timer_task->task_name, timer_task.use_count());
+  RMQLOG_INFO("Execute task: {}. Use-count: {}", timer_task->task_name, timer_task.use_count());
 
   // Execute the actual callback.
 #ifdef __EXCEPTIONS
@@ -171,11 +171,11 @@ void SchedulerImpl::execute(const asio::error_code& ec, std::weak_ptr<TimerTask>
     timer_task->callback();
 #ifdef __EXCEPTIONS
   } catch (std::exception& e) {
-    SPDLOG_WARN("Exception raised: {}", e.what());
+    RMQLOG_WARN("Exception raised: {}", e.what());
   } catch (std::string& e) {
-    SPDLOG_WARN("Exception raised: {}", e);
+    RMQLOG_WARN("Exception raised: {}", e);
   } catch (...) {
-    SPDLOG_WARN("Unknown exception type raised");
+    RMQLOG_WARN("Unknown exception type raised");
   }
 #endif
 
@@ -183,7 +183,7 @@ void SchedulerImpl::execute(const asio::error_code& ec, std::weak_ptr<TimerTask>
     auto& timer = timer_task->timer;
     timer->expires_at(timer->expiry() + timer_task->interval);
     timer->async_wait(std::bind(&SchedulerImpl::execute, std::placeholders::_1, task));
-    SPDLOG_DEBUG("Repeated timer-task {} to fire in {}ms", timer_task->task_name, timer_task->interval.count());
+    RMQLOG_DEBUG("Repeated timer-task {} to fire in {}ms", timer_task->task_name, timer_task->interval.count());
   } else {
     auto scheduler = timer_task->scheduler.lock();
     if (scheduler) {

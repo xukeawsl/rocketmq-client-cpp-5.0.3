@@ -21,7 +21,6 @@
 #include "ClientManagerImpl.h"
 #include "ConsumeMessageType.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 #include "ProcessQueue.h"
 #include "PushConsumerImpl.h"
 #include "rocketmq/ErrorCode.h"
@@ -40,7 +39,7 @@ void AsyncReceiveMessageCallback::onCompletion(
 
   std::shared_ptr<ProcessQueue> process_queue = process_queue_.lock();
   if (!process_queue) {
-    SPDLOG_INFO("Process queue has been destructed.");
+    RMQLOG_INFO("Process queue has been destructed.");
     return;
   }
 
@@ -50,7 +49,7 @@ void AsyncReceiveMessageCallback::onCompletion(
   }
 
   if (ec == ErrorCode::TooManyRequests) {
-    SPDLOG_WARN("Action of receiving message is throttled. Retry after 20ms. Queue={}", process_queue->simpleName());
+    RMQLOG_WARN("Action of receiving message is throttled. Retry after 20ms. Queue={}", process_queue->simpleName());
     receiveMessageLater(std::chrono::milliseconds(20), attempt_id);
     return;
   }
@@ -61,13 +60,13 @@ void AsyncReceiveMessageCallback::onCompletion(
   }
 
   if (ec) {
-    SPDLOG_WARN("Receive message from {} failed. Cause: {}. Retry after 1 second.", process_queue->simpleName(),
+    RMQLOG_WARN("Receive message from {} failed. Cause: {}. Retry after 1 second.", process_queue->simpleName(),
                 ec.message());
     receiveMessageLater(std::chrono::seconds(1), attempt_id);
     return;
   }
 
-  SPDLOG_DEBUG("Receive messages from broker[host={}] returns with status=FOUND, msgListSize={}, queue={}",
+  RMQLOG_DEBUG("Receive messages from broker[host={}] returns with status=FOUND, msgListSize={}, queue={}",
                result.source_host, result.messages.size(), process_queue->simpleName());
   process_queue->accountCache(result.messages);
   consumer->getConsumeMessageService()->dispatch(process_queue, result.messages);
@@ -79,12 +78,12 @@ const char* AsyncReceiveMessageCallback::RECEIVE_LATER_TASK_NAME = "receive-late
 void AsyncReceiveMessageCallback::checkThrottleThenReceive(std::string attempt_id) {
   auto process_queue = process_queue_.lock();
   if (!process_queue) {
-    SPDLOG_WARN("Process queue should have been destructed");
+    RMQLOG_WARN("Process queue should have been destructed");
     return;
   }
 
   if (process_queue->shouldThrottle()) {
-    SPDLOG_INFO("Number of messages in {} exceeds throttle threshold. Receive messages later.",
+    RMQLOG_INFO("Number of messages in {} exceeds throttle threshold. Receive messages later.",
                 process_queue->simpleName());
     process_queue->syncIdleState();
     receiveMessageLater(std::chrono::seconds(1), attempt_id);
@@ -117,13 +116,13 @@ void AsyncReceiveMessageCallback::receiveMessageLater(std::chrono::milliseconds 
 void AsyncReceiveMessageCallback::receiveMessageImmediately(std::string& attempt_id) {
   auto process_queue_shared_ptr = process_queue_.lock();
   if (!process_queue_shared_ptr) {
-    SPDLOG_INFO("ProcessQueue has been released. Ignore further receive message request-response cycles");
+    RMQLOG_INFO("ProcessQueue has been released. Ignore further receive message request-response cycles");
     return;
   }
 
   std::shared_ptr<PushConsumerImpl> impl = process_queue_shared_ptr->getConsumer().lock();
   if (!impl) {
-    SPDLOG_INFO("Owner of ProcessQueue[{}] has been released. Ignore further receive message request-response cycles",
+    RMQLOG_INFO("Owner of ProcessQueue[{}] has been released. Ignore further receive message request-response cycles",
                 process_queue_shared_ptr->simpleName());
     return;
   }

@@ -25,7 +25,6 @@
 #include "Signature.h"
 #include "google/protobuf/util/time_util.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -51,7 +50,7 @@ TelemetryBidiReactor::TelemetryBidiReactor(std::weak_ptr<Client> client,
 }
 
 TelemetryBidiReactor::~TelemetryBidiReactor() {
-  SPDLOG_INFO("Telemetry stream for {} destructed. StreamState={}", peer_address_, static_cast<std::uint8_t>(state_));
+  RMQLOG_INFO("Telemetry stream for {} destructed. StreamState={}", peer_address_, static_cast<std::uint8_t>(state_));
 }
 
 bool TelemetryBidiReactor::awaitApplyingSettings() {
@@ -71,13 +70,13 @@ bool TelemetryBidiReactor::awaitApplyingSettings() {
 }
 
 void TelemetryBidiReactor::OnWriteDone(bool ok) {
-  SPDLOG_DEBUG("{}#OnWriteDone", peer_address_);
+  RMQLOG_DEBUG("{}#OnWriteDone", peer_address_);
 
   // for write stream
   RemoveHold();
 
   if (!ok) {
-    SPDLOG_WARN("Failed to write telemetry command {} to {}", writes_.front().ShortDebugString(), peer_address_);
+    RMQLOG_WARN("Failed to write telemetry command {} to {}", writes_.front().ShortDebugString(), peer_address_);
     signalClose();
     return;
   }
@@ -94,11 +93,11 @@ void TelemetryBidiReactor::OnWriteDone(bool ok) {
 }
 
 void TelemetryBidiReactor::OnReadDone(bool ok) {
-  SPDLOG_DEBUG("{}#OnReadDone", peer_address_);
+  RMQLOG_DEBUG("{}#OnReadDone", peer_address_);
   if (!ok) {
     // for read stream
     RemoveHold();
-    // SPDLOG_WARN("Failed to read from telemetry stream from {}", peer_address_);
+    // RMQLOG_WARN("Failed to read from telemetry stream from {}", peer_address_);
     signalClose();
     return;
   }
@@ -110,10 +109,10 @@ void TelemetryBidiReactor::OnReadDone(bool ok) {
     }
   }
 
-  SPDLOG_DEBUG("Read a telemetry command from {}: {}", peer_address_, read_.ShortDebugString());
+  RMQLOG_DEBUG("Read a telemetry command from {}: {}", peer_address_, read_.ShortDebugString());
   auto client = client_.lock();
   if (!client) {
-    SPDLOG_INFO("Client for {} has destructed", peer_address_);
+    RMQLOG_INFO("Client for {} has destructed", peer_address_);
     signalClose();
     return;
   }
@@ -121,14 +120,14 @@ void TelemetryBidiReactor::OnReadDone(bool ok) {
   switch (read_.command_case()) {
     case rmq::TelemetryCommand::kSettings: {
       auto settings = read_.settings();
-      SPDLOG_INFO("Receive settings from {}: {}", peer_address_, settings.ShortDebugString());
+      RMQLOG_INFO("Receive settings from {}: {}", peer_address_, settings.ShortDebugString());
       applySettings(settings);
       sync_settings_promise_.set_value(true);
       break;
     }
 
     case rmq::TelemetryCommand::kRecoverOrphanedTransactionCommand: {
-      SPDLOG_INFO("Receive orphan transaction command: {}", read_.ShortDebugString());
+      RMQLOG_INFO("Receive orphan transaction command: {}", read_.ShortDebugString());
       auto message = client->manager()->wrapMessage(
           read_.recover_orphaned_transaction_command().message());
       auto raw = const_cast<Message*>(message.get());
@@ -164,7 +163,7 @@ void TelemetryBidiReactor::OnReadDone(bool ok) {
     }
 
     default: {
-      SPDLOG_WARN("Telemetry command receive unsupported command");
+      RMQLOG_WARN("Telemetry command receive unsupported command");
       break;
     }
   }
@@ -172,7 +171,7 @@ void TelemetryBidiReactor::OnReadDone(bool ok) {
   {
     absl::MutexLock lk(&state_mtx_);
     if (StreamState::Ready == state_) {
-      SPDLOG_DEBUG("Spawn new read op, state={}", static_cast<std::uint8_t>(state_));
+      RMQLOG_DEBUG("Spawn new read op, state={}", static_cast<std::uint8_t>(state_));
       StartRead(&read_);
     }
   }
@@ -181,7 +180,7 @@ void TelemetryBidiReactor::OnReadDone(bool ok) {
 void TelemetryBidiReactor::applySettings(const rmq::Settings& settings) {
   auto ptr = client_.lock();
   if (!ptr) {
-    SPDLOG_INFO("Client for {} has destructed", peer_address_);
+    RMQLOG_INFO("Client for {} has destructed", peer_address_);
     return;
   }
 
@@ -238,7 +237,7 @@ void TelemetryBidiReactor::applyPublishingConfig(const rmq::Settings& settings, 
   if (!settings.publishing().topics().empty()) {
     for (const auto& topic : settings.publishing().topics()) {
       if (topic.resource_namespace() != client->config().resource_namespace) {
-        SPDLOG_INFO("Client namespace is changed from [{}] to [{}]", client->config().resource_namespace,
+        RMQLOG_INFO("Client namespace is changed from [{}] to [{}]", client->config().resource_namespace,
                     topic.resource_namespace());
         client->config().resource_namespace = topic.resource_namespace();
         break;
@@ -253,7 +252,7 @@ void TelemetryBidiReactor::applySubscriptionConfig(const rmq::Settings& settings
   if (!settings.subscription().subscriptions().empty()) {
     for (const auto& subscription : settings.subscription().subscriptions()) {
       if (subscription.topic().resource_namespace() != client->config().resource_namespace) {
-        SPDLOG_INFO("Client namespace is changed from [{}] to [{}]", client->config().resource_namespace,
+        RMQLOG_INFO("Client namespace is changed from [{}] to [{}]", client->config().resource_namespace,
                     subscription.topic().resource_namespace());
         client->config().resource_namespace = subscription.topic().resource_namespace();
         break;
@@ -269,7 +268,7 @@ void TelemetryBidiReactor::applySubscriptionConfig(const rmq::Settings& settings
 }
 
 void TelemetryBidiReactor::write(TelemetryCommand command) {
-  SPDLOG_DEBUG("{}#write", peer_address_);
+  RMQLOG_DEBUG("{}#write", peer_address_);
   {
     absl::MutexLock lk(&state_mtx_);
     // Reject incoming write commands if the stream state is closing or has witnessed some error.
@@ -286,26 +285,26 @@ void TelemetryBidiReactor::write(TelemetryCommand command) {
 }
 
 void TelemetryBidiReactor::tryWriteNext() {
-  SPDLOG_DEBUG("{}#tryWriteNext", peer_address_);
+  RMQLOG_DEBUG("{}#tryWriteNext", peer_address_);
   absl::MutexLock lk(&writes_mtx_);
   if (StreamState::Ready != state_) {
-    SPDLOG_WARN("Further write to {} is not allowed due to stream-state={}", peer_address_,
+    RMQLOG_WARN("Further write to {} is not allowed due to stream-state={}", peer_address_,
                 static_cast<std::uint8_t>(state_));
     return;
   }
 
   if (writes_.empty()) {
-    SPDLOG_DEBUG("No pending TelemetryCommand to write. Peer={}", peer_address_);
+    RMQLOG_DEBUG("No pending TelemetryCommand to write. Peer={}", peer_address_);
     return;
   }
 
   if (!writes_.empty()) {
-    SPDLOG_DEBUG("Writing TelemetryCommand to {}: {}", peer_address_, writes_.front().ShortDebugString());
+    RMQLOG_DEBUG("Writing TelemetryCommand to {}: {}", peer_address_, writes_.front().ShortDebugString());
     if (StreamState::Ready == state_) {
       AddHold();
       StartWrite(&(writes_.front()));
     } else {
-      SPDLOG_WARN("Writing TelemetryCommand error due to unexpected state. State={}, Peer={}",
+      RMQLOG_WARN("Writing TelemetryCommand error due to unexpected state. State={}, Peer={}",
                   static_cast<uint8_t>(state_), peer_address_);
     }
   }
@@ -319,7 +318,7 @@ void TelemetryBidiReactor::signalClose() {
 }
 
 void TelemetryBidiReactor::close() {
-  SPDLOG_DEBUG("{}#fireClose", peer_address_);
+  RMQLOG_DEBUG("{}#fireClose", peer_address_);
 
   {
     absl::MutexLock lk(&state_mtx_);
@@ -338,7 +337,7 @@ void TelemetryBidiReactor::close() {
   while (StreamState::Closed != state_) {
     absl::MutexLock lk(&state_mtx_);
     if (state_cv_.WaitWithTimeout(&state_mtx_, absl::Seconds(1))) {
-      SPDLOG_WARN("StreamState CondVar timed out before getting signalled: state={}",
+      RMQLOG_WARN("StreamState CondVar timed out before getting signalled: state={}",
                   static_cast<uint8_t>(state_));
     }
   }
@@ -352,9 +351,9 @@ void TelemetryBidiReactor::close() {
 ///
 /// \param[in] status The status outcome of this RPC
 void TelemetryBidiReactor::OnDone(const grpc::Status& status) {
-  SPDLOG_DEBUG("{}#OnDone, status.ok={}", peer_address_, status.ok());
+  RMQLOG_DEBUG("{}#OnDone, status.ok={}", peer_address_, status.ok());
   if (!status.ok()) {
-    SPDLOG_DEBUG("{}#OnDone, status.error_code={}, status.error_message={}, status.error_details={}", peer_address_,
+    RMQLOG_DEBUG("{}#OnDone, status.error_code={}, status.error_message={}, status.error_details={}", peer_address_,
                 status.error_code(), status.error_message(), status.error_details());
   }
   {
@@ -374,21 +373,21 @@ void TelemetryBidiReactor::OnDone(const grpc::Status& status) {
 }
 
 void TelemetryBidiReactor::OnReadInitialMetadataDone(bool ok) {
-  SPDLOG_DEBUG("{}#OnReadInitialMetadataDone", peer_address_);
+  RMQLOG_DEBUG("{}#OnReadInitialMetadataDone", peer_address_);
 
   if (!ok) {
     // for read stream
     // Remove the hold corresponding to AddHold in TelemetryBidiReactor::TelemetryBidiReactor.
     // RemoveHold();
 
-    SPDLOG_DEBUG("Change state {} --> {}", static_cast<std::uint8_t>(state_),
+    RMQLOG_DEBUG("Change state {} --> {}", static_cast<std::uint8_t>(state_),
                  static_cast<std::uint8_t>(StreamState::Closing));
-    SPDLOG_WARN("Read of initial-metadata failed from {}", peer_address_);
+    RMQLOG_WARN("Read of initial-metadata failed from {}", peer_address_);
     signalClose();
     return;
   }
 
-  SPDLOG_DEBUG("Received initial metadata from {}", peer_address_);
+  RMQLOG_DEBUG("Received initial metadata from {}", peer_address_);
 }
 
 ROCKETMQ_NAMESPACE_END

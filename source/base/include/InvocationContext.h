@@ -28,7 +28,6 @@
 #include "grpcpp/impl/codegen/async_unary_call.h"
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 #include "MetadataConstants.h"
 #include "UniqueIdGenerator.h"
 
@@ -61,7 +60,7 @@ struct InvocationContext : public BaseInvocationContext {
   void onCompletion(bool ok) override {
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
-    SPDLOG_DEBUG("RPC[{}] costs {}ms", task_name, elapsed);
+    RMQLOG_DEBUG("RPC[{}] costs {}ms", task_name, elapsed);
     /// Client-side Read, Server-side Read, Client-side
     /// RecvInitialMetadata (which is typically included in Read if not
     /// done explicitly): ok indicates whether there is a valid message
@@ -71,7 +70,7 @@ struct InvocationContext : public BaseInvocationContext {
     /// server-side operation, though, this could happen because the client
     /// has done a WritesDone already.
     if (!ok) {
-      SPDLOG_WARN("One async call is already dead");
+      RMQLOG_WARN("One async call is already dead");
       if (callback) {
         callback(this);
       }
@@ -83,7 +82,7 @@ struct InvocationContext : public BaseInvocationContext {
       auto diff =
           std::chrono::duration_cast<std::chrono::milliseconds>(
               std::chrono::system_clock::now() - context.deadline()).count();
-      SPDLOG_WARN("Asynchronous RPC[{}.{}] timed out, elapsing {}ms, deadline-over-due: {}ms",
+      RMQLOG_WARN("Asynchronous RPC[{}.{}] timed out, elapsing {}ms, deadline-over-due: {}ms",
                   absl::FormatTime(created_time, absl::UTCTimeZone()), elapsed, diff);
     }
 
@@ -92,9 +91,9 @@ struct InvocationContext : public BaseInvocationContext {
         callback(this);
       }
     } catch (const std::exception& e) {
-      SPDLOG_WARN("Unexpected error while invoking user-defined callback. Reason: {}", e.what());
+      RMQLOG_WARN("Unexpected error while invoking user-defined callback. Reason: {}", e.what());
     } catch (...) {
-      SPDLOG_WARN("Unexpected error while invoking user-defined callback");
+      RMQLOG_WARN("Unexpected error while invoking user-defined callback");
     }
     delete this;
   }

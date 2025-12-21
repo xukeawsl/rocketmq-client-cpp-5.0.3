@@ -17,7 +17,6 @@
 #include "UtilAll.h"
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 #include "zlib.h"
 #include <cstring>
 
@@ -81,10 +80,10 @@ bool UtilAll::macAddress(std::vector<unsigned char>& mac) {
         }
       }
       if (all_zero) {
-        SPDLOG_TRACE("Skip MAC address of network interface {}", node->ifa_name);
+        RMQLOG_TRACE("Skip MAC address of network interface {}", node->ifa_name);
         continue;
       }
-      SPDLOG_DEBUG("Use MAC address of network interface {}", node->ifa_name);
+      RMQLOG_DEBUG("Use MAC address of network interface {}", node->ifa_name);
       // MAC address has 48 bits
       cache.resize(6);
       memcpy(cache.data(), ptr, 6);

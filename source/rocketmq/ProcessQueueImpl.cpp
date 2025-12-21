@@ -41,11 +41,11 @@ ProcessQueueImpl::ProcessQueueImpl(rmq::MessageQueue message_queue, FilterExpres
       invisible_time_(MixAll::millisecondsOf(MixAll::DEFAULT_INVISIBLE_TIME_)),
       simple_name_(simpleNameOf(message_queue_)), consumer_(std::move(consumer)),
       client_manager_(std::move(client_instance)), cached_message_quantity_(0), cached_message_memory_(0) {
-  SPDLOG_DEBUG("Created ProcessQueue={}", simpleName());
+  RMQLOG_DEBUG("Created ProcessQueue={}", simpleName());
 }
 
 ProcessQueueImpl::~ProcessQueueImpl() {
-  SPDLOG_INFO("ProcessQueue={} should have been re-balanced away, thus, is destructed", simpleName());
+  RMQLOG_INFO("ProcessQueue={} should have been re-balanced away, thus, is destructed", simpleName());
 }
 
 void ProcessQueueImpl::callback(std::shared_ptr<AsyncReceiveMessageCallback> callback) {
@@ -55,7 +55,7 @@ void ProcessQueueImpl::callback(std::shared_ptr<AsyncReceiveMessageCallback> cal
 bool ProcessQueueImpl::expired() const {
   auto duration = std::chrono::steady_clock::now() - idle_since_;
   if (duration > MixAll::PROCESS_QUEUE_EXPIRATION_THRESHOLD_) {
-    SPDLOG_WARN("ProcessQueue={} is expired. It remains idle for {}ms", simpleName(), MixAll::millisecondsOf(duration));
+    RMQLOG_WARN("ProcessQueue={} is expired. It remains idle for {}ms", simpleName(), MixAll::millisecondsOf(duration));
     return true;
   }
   return false;
@@ -80,7 +80,7 @@ bool ProcessQueueImpl::shouldThrottle() const {
   uint64_t memory_threshold = consumer->maxCachedMessageMemory();
   bool need_throttle = quantity >= quantity_threshold;
   if (need_throttle) {
-    SPDLOG_INFO("{}: Number of locally cached messages is {}, which exceeds threshold={}", simple_name_, quantity,
+    RMQLOG_INFO("{}: Number of locally cached messages is {}, which exceeds threshold={}", simple_name_, quantity,
                 quantity_threshold);
     return true;
   }
@@ -89,7 +89,7 @@ bool ProcessQueueImpl::shouldThrottle() const {
     uint64_t bytes = cached_message_memory_.load(std::memory_order_relaxed);
     need_throttle = bytes >= memory_threshold;
     if (need_throttle) {
-      SPDLOG_INFO("{}: Locally cached messages take {} bytes, which exceeds threshold={}", simple_name_, bytes,
+      RMQLOG_INFO("{}: Locally cached messages take {} bytes, which exceeds threshold={}", simple_name_, bytes,
                   memory_threshold);
       return true;
     }
@@ -116,7 +116,7 @@ void ProcessQueueImpl::popMessage(std::string& attempt_id) {
   Signature::sign(consumer_client->config(), metadata);
   wrapPopMessageRequest(metadata, request, attempt_id);
   syncIdleState();
-  SPDLOG_DEBUG("Receive message from={}, attemptId={}", simpleNameOf(message_queue_), attempt_id);
+  RMQLOG_DEBUG("Receive message from={}, attemptId={}", simpleNameOf(message_queue_), attempt_id);
 
   std::weak_ptr<AsyncReceiveMessageCallback> cb{receive_callback_};
   auto callback =
@@ -143,7 +143,7 @@ void ProcessQueueImpl::accountCache(const std::vector<MessageConstSharedPtr>& me
     cached_message_memory_.fetch_add(message->body().size(), std::memory_order_relaxed);
   }
 
-  SPDLOG_DEBUG("Cache of process-queue={} has {} messages, body of them taking up {} bytes", simple_name_,
+  RMQLOG_DEBUG("Cache of process-queue={} has {} messages, body of them taking up {} bytes", simple_name_,
                cached_message_quantity_.load(std::memory_order_relaxed),
                cached_message_memory_.load(std::memory_order_relaxed));
 }

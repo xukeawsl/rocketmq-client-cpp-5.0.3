@@ -211,7 +211,7 @@ void SimpleConsumerImpl::updateAssignments(const std::string& topic, const std::
   }
 
   if (changed) {
-    SPDLOG_DEBUG("Assignments for topic={} change to: {}", topic,
+    RMQLOG_DEBUG("Assignments for topic={} change to: {}", topic,
                  absl::StrJoin(assignments.begin(), assignments.end(), ",",
                                [](std::string* out, const rmq::Assignment& assignment) {
                                  out->append(assignment.DebugString());
@@ -225,7 +225,7 @@ void SimpleConsumerImpl::refreshAssignment(const std::string& topic, std::functi
   absl::flat_hash_set<std::string> endpoints;
   endpointsInUse(endpoints);
   if (endpoints.empty()) {
-    SPDLOG_WARN("No broker is available");
+    RMQLOG_WARN("No broker is available");
     return;
   }
 
@@ -286,7 +286,7 @@ void SimpleConsumerImpl::refreshAssignments() {
         cv->Wait(mtx.get());
       }
     }
-    SPDLOG_INFO("Assignments for {} received", topic);
+    RMQLOG_INFO("Assignments for {} received", topic);
   }
 }
 

@@ -41,7 +41,7 @@
 #include "absl/strings/str_split.h"
 #include "fmt/format.h"
 #include "opencensus/stats/stats.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -94,13 +94,13 @@ rmq::Endpoints ClientImpl::accessPoint() {
 void ClientImpl::start() {
   State expected = CREATED;
   if (!state_.compare_exchange_strong(expected, State::STARTING)) {
-    SPDLOG_ERROR("Attempt to start ClientImpl failed. Expecting: {} Actual: {}", State::CREATED,
+    RMQLOG_ERROR("Attempt to start ClientImpl failed. Expecting: {} Actual: {}", State::CREATED,
                  state_.load(std::memory_order_relaxed));
     return;
   }
 
   if (!name_server_resolver_) {
-    SPDLOG_ERROR("No name server resolver is configured.");
+    RMQLOG_ERROR("No name server resolver is configured.");
     abort();
   }
   name_server_resolver_->start();
@@ -114,7 +114,7 @@ void ClientImpl::start() {
 
   const auto& endpoint = name_server_resolver_->resolve();
   if (endpoint.empty()) {
-    SPDLOG_ERROR("Failed to resolve name server address");
+    RMQLOG_ERROR("Failed to resolve name server address");
     return;
   }
 
@@ -142,7 +142,7 @@ void ClientImpl::start() {
       completed = false;
       auto callback = [&, mtx, cv](const std::error_code& ec, const TopicRouteDataPtr ptr) {
         if (ec) {
-          SPDLOG_ERROR("Failed to query route for {} during starting. Cause: {}", topic, ec.message());
+          RMQLOG_ERROR("Failed to query route for {} during starting. Cause: {}", topic, ec.message());
         }
 
         {
@@ -175,7 +175,7 @@ void ClientImpl::start() {
   auto telemetry_functor = [ptr]() {
     std::shared_ptr<ClientImpl> base = ptr.lock();
     if (base) {
-      SPDLOG_DEBUG("Sync client settings to servers");
+      RMQLOG_DEBUG("Sync client settings to servers");
       base->syncClientSettings();
     }
   };
@@ -195,7 +195,7 @@ void ClientImpl::start() {
 #else
     opencensus::stats::StatsExporter::SetInterval(absl::Minutes(1));
 #endif
-    SPDLOG_INFO("Export client metrics to {}", metric_service_endpoint);
+    RMQLOG_INFO("Export client metrics to {}", metric_service_endpoint);
     opencensus::stats::StatsExporter::RegisterPushHandler(
         absl::make_unique<OpencensusHandler>(metric_service_endpoint, client_weak_ptr));
   }
@@ -218,7 +218,7 @@ std::string ClientImpl::metricServiceEndpoint() const {
       break;
     }
     default: {
-      SPDLOG_ERROR("Unknown metric address scheme");
+      RMQLOG_ERROR("Unknown metric address scheme");
     }
   }
 
@@ -250,7 +250,7 @@ void ClientImpl::shutdown() {
 
     client_manager_.reset();
   } else {
-    SPDLOG_ERROR("Try to shutdown ClientImpl, but its state is not as expected. Expecting: {}, Actual: {}",
+    RMQLOG_ERROR("Try to shutdown ClientImpl, but its state is not as expected. Expecting: {}, Actual: {}",
                  State::STOPPING, state_.load(std::memory_order_relaxed));
   }
 }
@@ -300,12 +300,12 @@ void ClientImpl::getRouteFor(const std::string& topic,
     if (query_backend) {
       if (inflight_route_requests_.contains(topic)) {
         inflight_route_requests_.at(topic).emplace_back(cb);
-        SPDLOG_DEBUG("Would reuse prior route request for topic={}", topic);
+        RMQLOG_DEBUG("Would reuse prior route request for topic={}", topic);
         return;
       } else {
         std::vector<std::function<void(const std::error_code&, const TopicRouteDataPtr&)>> inflight{cb};
         inflight_route_requests_.insert({topic, inflight});
-        SPDLOG_INFO("Create inflight route query cache for topic={}", topic);
+        RMQLOG_INFO("Create inflight route query cache for topic={}", topic);
       }
     }
   }
@@ -323,22 +323,22 @@ void ClientImpl::fetchRouteFor(const std::string& topic,
                                const std::function<void(const std::error_code&, const TopicRouteDataPtr&)>& cb) {
   std::string name_server = name_server_resolver_->resolve();
   if (name_server.empty()) {
-    SPDLOG_WARN("No name server available");
+    RMQLOG_WARN("No name server available");
     return;
   }
 
   auto callback = [this, topic, name_server, cb](const std::error_code& ec, const TopicRouteDataPtr& route) {
     if (ec) {
-      SPDLOG_WARN("Failed to resolve route for topic={} from {}", topic, name_server);
+      RMQLOG_WARN("Failed to resolve route for topic={} from {}", topic, name_server);
       std::string name_server_changed = name_server_resolver_->resolve();
       if (!name_server_changed.empty()) {
-        SPDLOG_INFO("Change current name server from {} to {}", name_server, name_server_changed);
+        RMQLOG_INFO("Change current name server from {} to {}", name_server, name_server_changed);
       }
       cb(ec, nullptr);
       return;
     }
 
-    SPDLOG_DEBUG("Apply callback of fetchRouteFor({}) since a valid route is fetched", topic);
+    RMQLOG_DEBUG("Apply callback of fetchRouteFor({}) since a valid route is fetched", topic);
     cb(ec, route);
   };
 
@@ -362,7 +362,7 @@ void ClientImpl::syncClientSettings() {
 void ClientImpl::updateRouteInfo() {
   if (State::STARTED != state_.load(std::memory_order_relaxed) &&
       State::STARTING != state_.load(std::memory_order_relaxed)) {
-    SPDLOG_WARN("Unexpected client instance state={}.", state_.load(std::memory_order_relaxed));
+    RMQLOG_WARN("Unexpected client instance state={}.", state_.load(std::memory_order_relaxed));
     return;
   }
 
@@ -375,7 +375,7 @@ void ClientImpl::updateRouteInfo() {
   }
   topicsOfInterest(topics);
 
-  SPDLOG_DEBUG("Query route for {}", absl::StrJoin(topics, ","));
+  RMQLOG_DEBUG("Query route for {}", absl::StrJoin(topics, ","));
 
   if (!topics.empty()) {
     for (const auto& topic : topics) {
@@ -383,14 +383,14 @@ void ClientImpl::updateRouteInfo() {
           topic, std::bind(&ClientImpl::updateRouteCache, this, topic, std::placeholders::_1, std::placeholders::_2));
     }
   }
-  SPDLOG_DEBUG("Topic route info updated");
+  RMQLOG_DEBUG("Topic route info updated");
 }
 
 void ClientImpl::heartbeat() {
   absl::flat_hash_set<std::string> hosts;
   endpointsInUse(hosts);
   if (hosts.empty()) {
-    SPDLOG_WARN("No hosts to send heartbeat to at present");
+    RMQLOG_WARN("No hosts to send heartbeat to at present");
     return;
   }
 
@@ -403,10 +403,10 @@ void ClientImpl::heartbeat() {
   for (const auto& target : hosts) {
     auto callback = [target](const std::error_code& ec, const HeartbeatResponse& response) {
       if (ec) {
-        SPDLOG_WARN("Failed to heartbeat against {}. Cause: {}", target, ec.message());
+        RMQLOG_WARN("Failed to heartbeat against {}. Cause: {}", target, ec.message());
         return;
       }
-      SPDLOG_DEBUG("Heartbeat to {} OK", target);
+      RMQLOG_DEBUG("Heartbeat to {} OK", target);
     };
     client_manager_->heartbeat(target, metadata, request,
       absl::ToChronoMilliseconds(client_config_.request_timeout), callback);
@@ -416,7 +416,7 @@ void ClientImpl::heartbeat() {
 void ClientImpl::onTopicRouteReady(const std::string& topic, const std::error_code& ec,
                                    const TopicRouteDataPtr& route) {
   if (route) {
-    SPDLOG_DEBUG("Received route data for topic={}", topic);
+    RMQLOG_DEBUG("Received route data for topic={}", topic);
   }
 
   updateRouteCache(topic, ec, route);
@@ -431,7 +431,7 @@ void ClientImpl::onTopicRouteReady(const std::string& topic, const std::error_co
     inflight_route_requests_.erase(topic);
   }
 
-  SPDLOG_DEBUG("Apply cached callbacks with acquired route data for topic={}", topic);
+  RMQLOG_DEBUG("Apply cached callbacks with acquired route data for topic={}", topic);
   for (const auto& cb : pending_requests) {
     cb(ec, route);
   }
@@ -439,7 +439,7 @@ void ClientImpl::onTopicRouteReady(const std::string& topic, const std::error_co
 
 void ClientImpl::updateRouteCache(const std::string& topic, const std::error_code& ec, const TopicRouteDataPtr& route) {
   if (ec || !route || route->messageQueues().empty()) {
-    SPDLOG_WARN("Yuck! route for {} is invalid. Cause: {}", topic, ec.message());
+    RMQLOG_WARN("Yuck! route for {} is invalid. Cause: {}", topic, ec.message());
     return;
   }
 
@@ -447,13 +447,13 @@ void ClientImpl::updateRouteCache(const std::string& topic, const std::error_cod
     absl::MutexLock lk(&topic_route_table_mtx_);
     if (!topic_route_table_.contains(topic)) {
       topic_route_table_.insert({topic, route});
-      SPDLOG_INFO("TopicRouteData for topic={} has changed. NONE --> {}", topic, route->debugString());
+      RMQLOG_INFO("TopicRouteData for topic={} has changed. NONE --> {}", topic, route->debugString());
     } else {
       TopicRouteDataPtr cached = topic_route_table_.at(topic);
       if (*cached != *route) {
         topic_route_table_.insert_or_assign(topic, route);
         std::string previous = cached->debugString();
-        SPDLOG_INFO("TopicRouteData for topic={} has changed. {} --> {}", topic, cached->debugString(),
+        RMQLOG_INFO("TopicRouteData for topic={} has changed. {} --> {}", topic, cached->debugString(),
                     route->debugString());
       }
     }
@@ -513,7 +513,7 @@ void ClientImpl::createSession(const std::string& target, bool verify) {
 
   std::weak_ptr<ClientImpl> client = self();
   auto rpc_client = client_manager_->getRpcClient(target, true);
-  SPDLOG_DEBUG("Create a new session for {}", target);
+  RMQLOG_DEBUG("Create a new session for {}", target);
   auto session = absl::make_unique<SessionImpl>(client, rpc_client);
   {
     absl::MutexLock lk(&session_map_mtx_);
@@ -565,7 +565,7 @@ void ClientImpl::recoverOrphanedTransaction(MessageConstSharedPtr message) {
 
 void ClientImpl::doRecoverOrphanedTransaction(MessageConstSharedPtr message) {
   if (!message) {
-    SPDLOG_WARN("Failed to decode orphaned transaction message");
+    RMQLOG_WARN("Failed to decode orphaned transaction message");
     return;
   }
 
@@ -576,7 +576,7 @@ void ClientImpl::onRemoteEndpointRemoval(const std::vector<std::string>& hosts) 
   absl::MutexLock lk(&isolated_endpoints_mtx_);
   for (auto it = isolated_endpoints_.begin(); it != isolated_endpoints_.end();) {
     if (hosts.end() != std::find_if(hosts.begin(), hosts.end(), [&](const std::string& item) { return *it == item; })) {
-      SPDLOG_INFO("Drop isolated-endoint[{}] as it has been removed from route table", *it);
+      RMQLOG_INFO("Drop isolated-endoint[{}] as it has been removed from route table", *it);
       isolated_endpoints_.erase(it++);
     } else {
       it++;
@@ -590,7 +590,7 @@ void ClientImpl::schedule(const std::string& task_name, const std::function<void
 }
 
 void ClientImpl::notifyClientTermination() {
-  SPDLOG_WARN("Should NOT reach here. Subclass should have overridden this function.");
+  RMQLOG_WARN("Should NOT reach here. Subclass should have overridden this function.");
   std::abort();
 }
 
@@ -605,7 +605,7 @@ void ClientImpl::notifyClientTermination(const NotifyClientTerminationRequest& r
     std::error_code ec = client_manager_->notifyClientTermination(
         endpoint, metadata, request,absl::ToChronoMilliseconds(client_config_.request_timeout));
     if (ec) {
-      SPDLOG_WARN("Notify client termination error, ErrorCode={}, Endpoint={}", ec.message(), endpoint);
+      RMQLOG_WARN("Notify client termination error, ErrorCode={}, Endpoint={}", ec.message(), endpoint);
     }
   }
 }

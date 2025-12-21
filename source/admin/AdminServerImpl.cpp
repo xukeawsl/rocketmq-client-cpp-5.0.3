@@ -18,7 +18,7 @@
 
 #include "AdminServiceImpl.h"
 #include "ServerCall.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 #include <memory>
 
 using grpc::ServerBuilder;
@@ -48,7 +48,7 @@ bool AdminServerImpl::start() {
       std::unique_lock<std::mutex> lk(loop_mtx_);
       loop_cv_.wait(lk, [this]() { return State::STARTED == state_.load(); });
     }
-    SPDLOG_INFO("Admin server started and listening 127.0.0.1:{}", port_);
+    RMQLOG_INFO("Admin server started and listening 127.0.0.1:{}", port_);
     return true;
   }
   return false;
@@ -62,7 +62,7 @@ void AdminServerImpl::loop() {
       loop_cv_.notify_all();
     }
 
-    SPDLOG_DEBUG("Prepare initial ServerCall");
+    RMQLOG_DEBUG("Prepare initial ServerCall");
     new ServerCall(async_stub_.get(), service_.get(), completion_queue_.get());
     void* tag;
     bool ok;
@@ -86,7 +86,7 @@ bool AdminServerImpl::stop() {
   if (server_) {
     State expected = State::STARTED;
     if (state_.compare_exchange_strong(expected, State::STOPPING, std::memory_order_relaxed)) {
-      SPDLOG_INFO("Stopping admin server");
+      RMQLOG_INFO("Stopping admin server");
       server_->Shutdown();
 
       if (completion_queue_) {
@@ -105,12 +105,12 @@ bool AdminServerImpl::stop() {
       }
 
       state_.store(State::STOPPED);
-      SPDLOG_INFO("Admin server stopped");
+      RMQLOG_INFO("Admin server stopped");
       return true;
     }
     return false;
   } else {
-    SPDLOG_ERROR("Admin server is unexpected nullptr");
+    RMQLOG_ERROR("Admin server is unexpected nullptr");
   }
   return false;
 }

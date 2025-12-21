@@ -24,7 +24,7 @@
 #include "opencensus/trace/span.h"
 #include "rocketmq/ErrorCode.h"
 #include "rocketmq/SendReceipt.h"
-#include "spdlog/spdlog.h"
+#include "rocketmq/Logger.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -37,7 +37,7 @@ void SendContext::onSuccess(const SendResult& send_result) noexcept {
 
   auto producer = producer_.lock();
   if (!producer) {
-    SPDLOG_WARN("Producer has been destructed");
+    RMQLOG_WARN("Producer has been destructed");
     return;
   }
 
@@ -71,7 +71,7 @@ void SendContext::onFailure(const std::error_code& ec) noexcept {
 
   auto producer = producer_.lock();
   if (!producer) {
-    SPDLOG_WARN("Producer has been destructed");
+    RMQLOG_WARN("Producer has been destructed");
     return;
   }
 
@@ -87,7 +87,7 @@ void SendContext::onFailure(const std::error_code& ec) noexcept {
   }
 
   if (++attempt_times_ >= producer->maxAttemptTimes()) {
-    SPDLOG_WARN("Retried {} times, which exceeds the limit: {}", attempt_times_, producer->maxAttemptTimes());
+    RMQLOG_WARN("Retried {} times, which exceeds the limit: {}", attempt_times_, producer->maxAttemptTimes());
     SendReceipt receipt{};
     receipt.message = std::move(message_);
     callback_(ec, receipt);
@@ -95,7 +95,7 @@ void SendContext::onFailure(const std::error_code& ec) noexcept {
   }
 
   if (candidates_.empty()) {
-    SPDLOG_WARN("No alternative hosts to perform additional retries");
+    RMQLOG_WARN("No alternative hosts to perform additional retries");
     SendReceipt receipt{};
     receipt.message = std::move(message_);
     callback_(ec, receipt);
@@ -109,7 +109,7 @@ void SendContext::onFailure(const std::error_code& ec) noexcept {
   // If publish message requests are throttled, retry after backoff
   if (ErrorCode::TooManyRequests == ec) {
     auto&& backoff = producer->backoff(attempt_times_);
-    SPDLOG_DEBUG("Publish message[topic={}, message-id={}] is throttled. Retry after {}ms", message_->topic(),
+    RMQLOG_DEBUG("Publish message[topic={}, message-id={}] is throttled. Retry after {}ms", message_->topic(),
                  message_->id(), MixAll::millisecondsOf(backoff));
     auto retry_cb = [=]() { producer->sendImpl(ctx); };
     producer->schedule("retry-after-send-throttle", retry_cb, backoff);

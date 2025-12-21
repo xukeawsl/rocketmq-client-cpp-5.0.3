@@ -17,7 +17,6 @@
 #include "CountdownLatch.h"
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -38,7 +37,7 @@ void CountdownLatch::countdown() {
   }
   if (!name_.empty()) {
     if (count_ >= 0) {
-      SPDLOG_TRACE("After countdown(), latch[{}]={}", name_, count_);
+      RMQLOG_TRACE("After countdown(), latch[{}]={}", name_, count_);
     }
   }
 }
@@ -47,7 +46,7 @@ void CountdownLatch::increaseCount() {
   absl::MutexLock lock(&mtx_);
   ++count_;
   if (!name_.empty()) {
-    SPDLOG_TRACE("After increaseCount(), latch[{}]={}", name_, count_);
+    RMQLOG_TRACE("After increaseCount(), latch[{}]={}", name_, count_);
   }
 }
 

@@ -22,7 +22,6 @@
 #include <system_error>
 
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 #include "absl/random/random.h"
 #include "absl/strings/str_split.h"
 #include "fmt/format.h"
@@ -144,7 +143,7 @@ const char* MixAll::SPAN_ANNOTATION_ATTR_START_TIME = "__start_time";
 
 void MixAll::validate(const Message& message, std::error_code& ec) {
   if (message.topic().empty()) {
-    SPDLOG_WARN("Topic of the message to publish is empty");
+    RMQLOG_WARN("Topic of the message to publish is empty");
     ec = ErrorCode::IllegalTopic;
     return;
   }
@@ -153,7 +152,7 @@ void MixAll::validate(const Message& message, std::error_code& ec) {
 
   // Legal topic characters are a-z, A-Z, 0-9, hyphen('-') and underline('_')
   if (!RE2::FullMatch(topic, TOPIC_REGEX)) {
-    SPDLOG_WARN("Topic of the message to publish does not match [a-zA-Z0-9\\-_%]{1,64}");
+    RMQLOG_WARN("Topic of the message to publish does not match [a-zA-Z0-9\\-_%]{1,64}");
     ec = ErrorCode::IllegalTopic;
   }
 }

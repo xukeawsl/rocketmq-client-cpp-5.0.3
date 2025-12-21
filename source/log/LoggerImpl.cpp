@@ -37,11 +37,10 @@ namespace fs = ghc::filesystem;
 ROCKETMQ_NAMESPACE_BEGIN
 
 const char* LoggerImpl::LOG_FILE = "/logs/rocketmq/client.log";
-const char* LoggerImpl::LOGGER_NAME = "rocketmq_logger";
 
 void LoggerImpl::setLevel(Level level) {
   level_ = level;
-  auto logger = spdlog::get(LOGGER_NAME);
+  auto logger = spdlog::get(RMQLOGGER);
   if (logger) {
     setLevel(logger, level_);
   }
@@ -92,35 +91,35 @@ void LoggerImpl::init0() {
   setLevel(file_sink_, level_);
 
   // std::make_shared does not with initializer_list.
-  auto default_logger =
-      std::make_shared<spdlog::logger>(LOGGER_NAME, spdlog::sinks_init_list{console_sink_, file_sink_});
-  default_logger->flush_on(spdlog::level::warn);
+  auto rocketmq_logger =
+      std::make_shared<spdlog::logger>(RMQLOGGER, spdlog::sinks_init_list{console_sink_, file_sink_});
+  rocketmq_logger->flush_on(spdlog::level::warn);
   Level logger_level =
       static_cast<Level>(std::min(static_cast<std::uint8_t>(level_), static_cast<std::uint8_t>(console_level_)));
   switch (logger_level) {
     case Level::Trace: {
-      default_logger->set_level(spdlog::level::trace);
+      rocketmq_logger->set_level(spdlog::level::trace);
       break;
     }
     case Level::Debug: {
-      default_logger->set_level(spdlog::level::debug);
+      rocketmq_logger->set_level(spdlog::level::debug);
       break;
     }
     case Level::Info: {
-      default_logger->set_level(spdlog::level::info);
+      rocketmq_logger->set_level(spdlog::level::info);
       break;
     }
     case Level::Warn: {
-      default_logger->set_level(spdlog::level::warn);
+      rocketmq_logger->set_level(spdlog::level::warn);
       break;
     }
     default: {
-      default_logger->set_level(spdlog::level::info);
+      rocketmq_logger->set_level(spdlog::level::info);
       break;
     }
   }
   spdlog::flush_every(std::chrono::seconds(1));
-  spdlog::set_default_logger(default_logger);
+  spdlog::register_logger(rocketmq_logger);
 }
 
 Logger& getLogger() {

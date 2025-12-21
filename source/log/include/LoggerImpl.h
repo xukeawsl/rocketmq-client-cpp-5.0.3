@@ -18,7 +18,6 @@
 #include "rocketmq/Logger.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -31,6 +30,10 @@ public:
 
   void setConsoleLevel(Level level) override;
 
+  void setLogHome(const std::string& log_home) override {
+    log_home_ = log_home;
+  }
+
   void setFileSize(std::size_t file_size) override {
     file_size_ = file_size;
   }
@@ -41,15 +44,13 @@ public:
 
   void setPattern(std::string pattern) override {
     pattern_ = std::move(pattern);
-    auto logger = spdlog::get(LOGGER_NAME);
+    auto logger = spdlog::get(RMQLOGGER);
     if (logger) {
       logger->set_pattern(pattern_);
     }
   }
 
   void init() override;
-
-  static const char* LOGGER_NAME;
 
 private:
   void init0();
@@ -75,6 +76,9 @@ private:
         break;
       case Level::Error:
         target->set_level(spdlog::level::err);
+        break;
+      case Level::Off:
+        target->set_level(spdlog::level::off);
         break;
     }
   }

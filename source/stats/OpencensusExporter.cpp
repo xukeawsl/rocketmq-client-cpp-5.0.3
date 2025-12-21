@@ -31,7 +31,7 @@ OpencensusExporter::OpencensusExporter(std::string endpoints, std::weak_ptr<Clie
     auto channel = client_shared_ptr->manager()->createChannel(endpoints);
     stub_ = opencensus::proto::agent::metrics::v1::MetricsService::NewStub(channel);
   } else {
-    SPDLOG_ERROR("Failed to initialize OpencensusExporter. weak_ptr to Client is nullptr");
+    RMQLOG_ERROR("Failed to initialize OpencensusExporter. weak_ptr to Client is nullptr");
   }
 }
 
@@ -172,15 +172,15 @@ void OpencensusExporter::ExportViewData(
     if (ptr) {
       bidi_reactor_ = absl::make_unique<MetricBidiReactor>(ptr, shared_from_this());
     } else {
-      SPDLOG_INFO("did not create stream since the client is no longer available.");
+      RMQLOG_INFO("did not create stream since the client is no longer available.");
     }
   }
 
   if (request.metrics_size() && bidi_reactor_) {
-    SPDLOG_DEBUG("ExportMetricRequest: {}", request.DebugString());
+    RMQLOG_DEBUG("ExportMetricRequest: {}", request.DebugString());
     bidi_reactor_->write(request);
   } else {
-    SPDLOG_DEBUG("ExportMetricRequest contains no valid metric");
+    RMQLOG_DEBUG("ExportMetricRequest contains no valid metric");
   }
 }
 
@@ -189,7 +189,7 @@ void OpencensusExporter::resetStream() {
   if (ptr) {
     bidi_reactor_.reset(new MetricBidiReactor(ptr, shared_from_this()));
   } else {
-    SPDLOG_INFO("did not reset stream since the client is no longer available.");
+    RMQLOG_INFO("did not reset stream since the client is no longer available.");
   }
 }
 

@@ -22,7 +22,6 @@
 #include "apache/rocketmq/v2/definition.pb.h"
 #include "rocketmq/ErrorCode.h"
 #include "rocketmq/Logger.h"
-#include "spdlog/spdlog.h"
 
 ROCKETMQ_NAMESPACE_BEGIN
 
@@ -49,21 +48,21 @@ ReceiveMessageStreamReader::ReceiveMessageStreamReader(std::weak_ptr<ClientManag
 
 void ReceiveMessageStreamReader::OnReadDone(bool ok) {
   if (ok) {
-    SPDLOG_DEBUG("ReceiveMessageStreamReader#OnReadDone: ok={}", ok);
+    RMQLOG_DEBUG("ReceiveMessageStreamReader#OnReadDone: ok={}", ok);
   } else {
     if (result_.messages.empty() && !ec_) {
-      SPDLOG_WARN("ReceiveMessageStreamReader#OnReadDone: ok={}", ok);
+      RMQLOG_WARN("ReceiveMessageStreamReader#OnReadDone: ok={}", ok);
       ec_ = ErrorCode::BadGateway;
     } else {
-      SPDLOG_DEBUG("ReceiveMessageStreamReader#OnReadDone reached end-of-stream");
+      RMQLOG_DEBUG("ReceiveMessageStreamReader#OnReadDone reached end-of-stream");
     }
     return;
   }
 
-  SPDLOG_DEBUG("ReceiveMessageStreamReader#OnReadDone: response={}", response_.DebugString());
+  RMQLOG_DEBUG("ReceiveMessageStreamReader#OnReadDone: response={}", response_.DebugString());
   switch (response_.content_case()) {
     case rmq::ReceiveMessageResponse::ContentCase::kStatus: {
-      SPDLOG_DEBUG("ReceiveMessageResponse.status.message={}", response_.status().message());
+      RMQLOG_DEBUG("ReceiveMessageResponse.status.message={}", response_.status().message());
       switch (response_.status().code()) {
         case rmq::Code::OK: {
           break;
@@ -130,7 +129,7 @@ void ReceiveMessageStreamReader::OnReadDone(bool ok) {
 
         default: {
           ec_ = ErrorCode::NotSupported;
-          SPDLOG_WARN("Unsupported code={}", response_.status().code());
+          RMQLOG_WARN("Unsupported code={}", response_.status().code());
           break;
         }
       }
@@ -155,9 +154,9 @@ void ReceiveMessageStreamReader::OnReadDone(bool ok) {
 
 void ReceiveMessageStreamReader::OnDone(const grpc::Status& s) {
   if (!s.ok()) {
-    SPDLOG_WARN("ReceiveMessageStreamReader#OnDone: status.ok={}, status.error_message={}", s.ok(), s.error_message());
+    RMQLOG_WARN("ReceiveMessageStreamReader#OnDone: status.ok={}, status.error_message={}", s.ok(), s.error_message());
   } else {
-    SPDLOG_DEBUG("ReceiveMessageStreamReader#OnDone: status.ok={}", s.ok());
+    RMQLOG_DEBUG("ReceiveMessageStreamReader#OnDone: status.ok={}", s.ok());
   }
 
   status_ = s;
