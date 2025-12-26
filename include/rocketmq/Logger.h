@@ -32,9 +32,11 @@
 
 #define RMQLOGGER "rocketmq_logger"
 
+#define RMQ_LOGGER (spdlog::get(RMQLOGGER) ? spdlog::get(RMQLOGGER) : spdlog::default_logger())
+
 #if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
 #    define RMQLOG_LOGGER_TRACE(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::trace, __VA_ARGS__)
-#    define RMQLOG_TRACE(...) RMQLOG_LOGGER_TRACE(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#    define RMQLOG_TRACE(...) RMQLOG_LOGGER_TRACE(RMQ_LOGGER, __VA_ARGS__)
 #else
 #    define RMQLOG_LOGGER_TRACE(logger, ...) (void)0
 #    define RMQLOG_TRACE(...) (void)0
@@ -42,7 +44,7 @@
 
 #if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
 #    define RMQLOG_LOGGER_DEBUG(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::debug, __VA_ARGS__)
-#    define RMQLOG_DEBUG(...) RMQLOG_LOGGER_DEBUG(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#    define RMQLOG_DEBUG(...) RMQLOG_LOGGER_DEBUG(RMQ_LOGGER, __VA_ARGS__)
 #else
 #    define RMQLOG_LOGGER_DEBUG(logger, ...) (void)0
 #    define RMQLOG_DEBUG(...) (void)0
@@ -50,7 +52,7 @@
 
 #if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_INFO
 #    define RMQLOG_LOGGER_INFO(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::info, __VA_ARGS__)
-#    define RMQLOG_INFO(...) RMQLOG_LOGGER_INFO(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#    define RMQLOG_INFO(...) RMQLOG_LOGGER_INFO(RMQ_LOGGER, __VA_ARGS__)
 #else
 #    define RMQLOG_LOGGER_INFO(logger, ...) (void)0
 #    define RMQLOG_INFO(...) (void)0
@@ -58,7 +60,7 @@
 
 #if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_WARN
 #    define RMQLOG_LOGGER_WARN(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::warn, __VA_ARGS__)
-#    define RMQLOG_WARN(...) RMQLOG_LOGGER_WARN(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#    define RMQLOG_WARN(...) RMQLOG_LOGGER_WARN(RMQ_LOGGER, __VA_ARGS__)
 #else
 #    define RMQLOG_LOGGER_WARN(logger, ...) (void)0
 #    define RMQLOG_WARN(...) (void)0
@@ -66,7 +68,7 @@
 
 #if RMQLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_ERROR
 #    define RMQLOG_LOGGER_ERROR(logger, ...) SPDLOG_LOGGER_CALL(logger, spdlog::level::err, __VA_ARGS__)
-#    define RMQLOG_ERROR(...) RMQLOG_LOGGER_ERROR(spdlog::get(RMQLOGGER), __VA_ARGS__)
+#    define RMQLOG_ERROR(...) RMQLOG_LOGGER_ERROR(RMQ_LOGGER, __VA_ARGS__)
 #else
 #    define RMQLOG_LOGGER_ERROR(logger, ...) (void)0
 #    define RMQLOG_ERROR(...) (void)0
