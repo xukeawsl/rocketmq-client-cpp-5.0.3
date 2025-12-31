@@ -6,7 +6,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(gRPC_DEBUG ON)
 
 # Assume gRPC is installed $HOME/grpc
-# list(APPEND CMAKE_PREFIX_PATH /usr/local/3rd/grpc-1.46.3)
+list(APPEND CMAKE_PREFIX_PATH /usr/local/3rd/grpc-1.46.3)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(protobuf CONFIG REQUIRED)
